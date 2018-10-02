@@ -157,9 +157,8 @@ def get_error_message(**kwargs) -> str:
 
 
 def main():
-    r = parse_expr('a0*)x(t-1)+a_1*u(t-1)+a_2*(x(t-2)+u(t-2))')
+    r = parse_expr('a0*x(t-1)+a_1*u(t-1)+a_2*(x(t-2)+u(t-2))')
     print(r)
 
 if __name__ == '__main__':
     main()
-
