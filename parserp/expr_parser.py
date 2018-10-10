@@ -22,50 +22,30 @@ default_params = {
 OPERATORS = ('+', '-', '*', '/', '**')
 BRAKETS = '()'
 
-# class Parser:
-#     def __init__(self):
-#         var_names = variable_names
-#         params = default_params
-#
-#     def parse_expr(self, expr: str):
-#         pass
 
-
-def parse_expr_old(expr: str):
+def parse_expr(expr: str):
     expr = expr.replace(' ', '')
     i = 0
-    # FIXME: last_idx
-    last_idx = 0
     res = ''
-    x_names = {}  # ключи - индексы, значения - списки с именами
+    x_names = {}  # ключи - индексы, значения - списки с именами или ключ - индекс, значение - (имя, тао)
     u_names = {}  # ключи - индексы, значения - списки с именами
-    tao_values = {}  # ключи - имена, значения - задержка  ???
     a_names = []  #
 
     while i < len(expr):
         s = expr[i]
         name = ''
-
-
         if s == variable_names['obj']:
-            name, idx, tao, i = parse_var(expr, i, last_idx)
-            # if idx in x_names:
-            #     pass
-            print('name =', name)
-            print('idx =', idx)
-            print('tao =', tao)
-            print('i =', i)
+            name, idx, tao, i = parse_var(expr, i)
+            if name not in x_names.keys():
+                x_names[name] = (idx, tao)
         elif s == variable_names['control']:
-            name, idx, tao, i = parse_var(expr, i, last_idx)
-            print('name =', name)
-            print('idx =', idx)
-            print('tao =', tao)
-            print('i =', i)
+            name, idx, tao, i = parse_var(expr, i)
+            if name not in u_names.keys():
+                u_names[name] = (idx, tao)
         elif s == variable_names['coefficient']:
-            name, idx, _, i = parse_var(expr, i, last_idx)
-            print('name =', name)
-            print('idx =', idx)
-            print('i =', i)
+            name, idx, _, i = parse_var(expr, i)
+            if name not in [item[0] for item in a_names]:
+                a_names.append((name, idx))
         elif s == variable_names['error']:
             pass
         elif s == variable_names['unknown_impact']:
@@ -73,13 +53,12 @@ def parse_expr_old(expr: str):
         else:
             res += s
             i += 1
-        # if name:
         res += name
 
-    return res
+    return res, x_names, u_names, a_names
 
 
-def parse_var(expr: str, i: int, last_idx: int) -> Union[Exception, Tuple[str, int, int, int]]:
+def parse_var(expr: str, i: int) -> Union[Exception, Tuple[str, int, int, int]]:
     var_control = variable_names['control']
     var_obj = variable_names['obj']
     var_coef = variable_names['coefficient']
@@ -98,7 +77,7 @@ def parse_var(expr: str, i: int, last_idx: int) -> Union[Exception, Tuple[str, i
         elif expr[i] in OPERATORS:
             if s == var_coef:
                 if idx == -1:
-                    idx = last_idx + 1
+                    idx = default_idx  # last_idx + 1
                 name = s + str(idx)
                 return name, idx, 0, i
             elif s in (var_control, var_obj):
@@ -112,6 +91,7 @@ def parse_var(expr: str, i: int, last_idx: int) -> Union[Exception, Tuple[str, i
                     name = s + str(idx) + '_' + str(idx)
                 else:
                     name = s + str(default_idx) + '_' + str(tao)
+                    idx = default_idx
                 return name, idx, tao, i
             elif s == var_coef:
                 message = 'Указание временной задержки у коэффициентов не поддерживаеся.'
@@ -123,7 +103,7 @@ def parse_var(expr: str, i: int, last_idx: int) -> Union[Exception, Tuple[str, i
     if i >= len(expr):
         if s == var_coef:
             if idx == -1:
-                idx = last_idx + 1
+                idx = default_idx  # last_idx + 1
             name = s + str(idx)
             return name, idx, 0, i
         elif s in (var_control, var_obj):
@@ -203,30 +183,81 @@ def get_token(expr: str):
             else:
                 yield sub_str
                 sub_str = c
+        else:
+            if sub_str:
+                yield sub_str
+                sub_str = ''
+            yield c
     if sub_str:
         yield sub_str
 
 
-def parse_expr(expr: str):
-    expr = expr.replace(' ', '')
-    # FIXME: last_idx
-    last_idx = 0
-    res = ''
-    x_names = {}  # ключи - индексы, значения - списки с именами
-    u_names = {}  # ключи - индексы, значения - списки с именами
-    tao_values = {}  # ключи - имена, значения - задержка  ???
-    a_names = []  #
+# def convert_names(tokens_gen):
+#     current_name = ''
+#     last_token = ''
+#     for token in tokens_gen:
+#         if (not current_name) and token in (variable_names['obj'], variable_names['control'], variable_names['coefficient']):
+#             current_name = token
+#         elif current_name == variable_names['coefficient']:
+#             if token == '_' and last_token != '_':
+#                 continue
+#             elif token.isdigit():
+#                 yield ()
+#             elif token in OPERATORS:
+#                 if last_token == current_name or last_token == '_':
+#                     name = current_name + str(last_idx)
+#                     a_names.append((name, last_idx))
+#                     current_name = ''
+#                     last_idx += 1
+#             else:
+#                 if last_token == current_name:
+#                     message = get_error_message(expect='разделитель или индекс', reality=token, position='нет')
+#                 else:
+#                     message = get_error_message(reality=token, position='нет')
+#                 raise ValueError(message)
 
-    current_name = ''
-    for token in get_token(expr):
-        if token == variable_names['coefficient']:
-            current_name = token
-        elif token in (variable_names['obj'], variable_names['control']):
-            pass
-        elif token == '.':
-            raise ValueError('Неожиданный символ "."')
-        else:
-            res += token
+
+# def parse_expr(expr: str):
+#     expr = expr.replace(' ', '')
+#     last_idx = 0
+#     res = ''
+#     x_names = {}  # ключи - индексы, значения - списки с именами
+#     u_names = {}  # ключи - индексы, значения - списки с именами
+#     a_names = []  #
+#     current_name = ''
+#     last_token = ''
+#     name = ''
+#     for token in get_token(expr):
+#         if token in (variable_names['obj'], variable_names['control'], variable_names['coefficient']):
+#             current_name = token
+#         elif current_name in (variable_names['obj'], variable_names['control']):
+#             pass
+#         elif current_name == variable_names['coefficient']:
+#             if token == '_' and last_token == current_name:
+#                 continue
+#             elif token.isdigit():
+#                 name = current_name + token
+#                 a_names.append((name, int(token)))
+#                 current_name = ''
+#             elif token in OPERATORS:
+#                 if last_token == current_name or last_token == '_':
+#                     name = current_name + str(last_idx)
+#                     a_names.append((name, last_idx))
+#                     current_name = ''
+#                     last_idx += 1
+#             else:
+#                 if last_token == current_name:
+#                     message = get_error_message(expect='разделитель или индекс', reality=token, position='нет')
+#                 else:
+#                     message = get_error_message(reality=token, position='нет')
+#                 raise ValueError(message)
+#         else:
+#             res += token
+#         if name:
+#             res += name
+#             name = ''
+#         last_token = token
+#     return res
 
 
 def int_parse(expr: str, i: int) -> Tuple[int, int]:
@@ -247,12 +278,11 @@ def get_error_message(**kwargs) -> str:
 
 
 def main():
-    # r = parse_expr('a*x(t-1)+a*u(t-1)+a*(x(t-2)+u(t-2))')
-    # r = parse_expr('arctg(x(t-1))')
-    # print(r)
-
-    for t in get_token('sin(123)'):  # arctg(a_0*x(t-1)+3.9)
-        print('->', t)
+    res, x_names, u_names, a_names = parse_expr('a_0*x(t-1)+a+2*a+cos(u(t-1))+a_1*u(t-2)')
+    print(res)
+    print(x_names)
+    print(u_names)
+    print(a_names)
 
 
 if __name__ == '__main__':
