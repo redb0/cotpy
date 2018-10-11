@@ -10,13 +10,3 @@ def check_brackets(expr: str, brackets: str='()') -> int:
             else:
                 return expr.index(c)
     return -1
-
-
-def main():
-    s = 'a0*x(t-1)+a_1*u(t-1)+a_2*(x(t-2)+u(t-2))'
-    i = check_brackets(s)
-    print(i)
-    print(s[i])
-
-if __name__ == '__main__':
-    main()

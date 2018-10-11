@@ -27,6 +27,7 @@ def parse_expr(expr: str):
     expr = expr.replace(' ', '')
     i = 0
     res = ''
+    # TODO: возможно переделать x_names и u_names в списки tuples
     x_names = {}  # ключи - индексы, значения - списки с именами или ключ - индекс, значение - (имя, тао)
     u_names = {}  # ключи - индексы, значения - списки с именами
     a_names = []  #
@@ -275,15 +276,3 @@ def get_error_message(**kwargs) -> str:
         message = 'Неожиданный символ'
     message += '. Текущий символ "' + kwargs['reality'] + '", позиция: ' + str(kwargs['position']) + '.'
     return message
-
-
-def main():
-    res, x_names, u_names, a_names = parse_expr('a_0*x(t-1)+a+2*a+cos(u(t-1))+a_1*u(t-2)')
-    print(res)
-    print(x_names)
-    print(u_names)
-    print(a_names)
-
-
-if __name__ == '__main__':
-    main()
