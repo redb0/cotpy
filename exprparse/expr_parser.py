@@ -88,7 +88,7 @@ def parse_var(expr: str, i: int) -> Union[Exception, Tuple[str, int, int, int]]:
             if s in (var_control, var_obj):
                 tao, i = parse_lag(expr, i, var_time)
                 if idx != -1:
-                    name = s + str(idx) + '_' + str(idx)
+                    name = s + str(idx) + '_' + str(tao)
                 else:
                     name = s + str(default_idx) + '_' + str(tao)
                     idx = default_idx
