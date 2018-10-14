@@ -1,20 +1,23 @@
-from typing import Union, List
+from typing import Union, List, Optional, NoReturn
 
 from sympy.utilities.autowrap import ufuncify
+from sympy.core.add import Add
 import sympy as sp
+import numpy as np
 
-from exprparse.validation import check_brackets
-from exprparse.expr_parser import parse_expr
+from analyzer.validation import check_brackets
+from analyzer.expr_parser import parse_expr
 
 
 Number = Union[int, float]
-ListNumber = List[Union[int, float]]
+ListNumber = List[Number]
+Matrix = List[ListNumber]
 
 
 class Variable:
     # TODO: документация
     def __init__(self, name: str, idx: int,
-                 tao: Union[int, None] = None, memory: int = 0, values: ListNumber = None) -> None:
+                 tao: Optional[int] = None, memory: int = 0, values: ListNumber = None) -> None:
         self._name = name
         self._idx = idx
         self._tao = tao
@@ -44,7 +47,7 @@ class Variable:
         return self._idx
 
     @property
-    def tao(self) -> Union[None, int]:
+    def tao(self) -> Optional[int]:
         return self._tao
 
     @property
@@ -56,8 +59,11 @@ class Variable:
         return self._values
 
     @property
-    def last_value(self):  # добавить тип
+    def last_value(self) -> Number:
         return self._values[-1]
+
+
+ListVars = List[Variable]
 
 
 class Model:
@@ -81,12 +87,12 @@ class Model:
         self._model_expr = None
         self._sp_var = []
 
-    def initialization(self, a, x, u) -> None:  # добавить тип
+    def initialization(self, a: Matrix, x: Matrix, u: Matrix) -> Optional[NoReturn]:  # добавить тип
         self.variable_init(a, t='a')
         self.variable_init(x, t='x')
         self.variable_init(u, t='u')
 
-    def variable_init(self, values, t='a'):  # добавить тип
+    def variable_init(self, values: Matrix, t='a') -> Optional[NoReturn]:  # добавить тип
         if t in ['a', 'x', 'u']:
             attr = self.__getattribute__('_' + t)
             if not attr:
@@ -107,7 +113,7 @@ class Model:
         else:
             raise ValueError('t = ' + t + '. t not in ["a", "x", "u"]')
 
-    def create_variables(self, data, t: str):  # добавить тип
+    def create_variables(self, data: Union[list, dict], t: str) -> Optional[NoReturn]:  # добавить тип
         variables = []
         if isinstance(data, list):
             for item in data:
@@ -123,16 +129,16 @@ class Model:
         else:
             raise ValueError('Не сущестует атрибута с именем "' + name_attr + '"')
 
-    def generate_func_grad(self):  # добавить тип
+    def generate_func_grad(self) -> Optional[NoReturn]:  # добавить тип
         if not self._sp_var:
             raise ValueError('Не сгенерированы sympy переменные')
         for c in self._a:
             self._grad.append(ufuncify(self._sp_var, self._model_expr.diff(c.name)))
 
-    def generate_sp_var(self):  # добавить тип
+    def generate_sp_var(self) -> None:
         self._sp_var = sp.var([v.name for v in [*self._x, *self._u, *self._a]])
 
-    def generate_model_func(self):  # добавить тип
+    def generate_model_func(self) -> None:
         self._func_model = ufuncify(self._sp_var, self._model_expr)
 
     @property
@@ -153,27 +159,27 @@ class Model:
         self._model_expr = sp.S(val)
 
     @property
-    def model_expr(self):  # добавить тип
+    def model_expr(self) -> Add:  # ПРОВЕРИТЬ
         return self._model_expr
 
     @property
-    def inputs(self):  # добавить тип
+    def inputs(self) -> ListVars:
         return self._u
 
     @property
-    def outputs(self):  # добавить тип
+    def outputs(self) -> ListVars:
         return self._x
 
     @property
-    def coefficients(self):  # добавить тип
+    def coefficients(self) -> ListVars:
         return self._a
 
     @property
-    def grad(self):  # добавить тип
+    def grad(self) -> List[np.ufunc]:
         return self._grad
 
     @property
-    def func_model(self):  # добавить тип
+    def func_model(self) -> np.ufunc:
         return self._func_model
 
 
@@ -183,7 +189,7 @@ def create_model(expr: str) -> Model:
         raise ValueError('Некорректно расставлены скобки')
     model_expr, x_names, u_names, a_names = parse_expr(expr)
     model = Model()
-    model.expr = expr
+    model.expr_str = expr
     model.model_expr_str = model_expr  # строковое и sympy выражения сохранены
     model.create_variables(x_names, t='x')
     model.create_variables(u_names, t='u')
@@ -205,6 +211,23 @@ def main():
     print(model.inputs)
     print(model.outputs)
     print(model.coefficients)
+    print(type(model.func_model))
+    print(type(model.model_expr))
+    print(model.model_expr)
+
+
+#     import timeit
+#     setup = """
+# from sympy.utilities.autowrap import ufuncify
+# import sympy as sp
+# expr = sp.S('a0*x0_1 + 3*a0 + a1*u0_2 + cos(u0_1)')
+# v = sp.var(['x0_1', 'u0_1', 'u0_2', 'a0', 'a1'])
+#     """
+#
+#     t1 = timeit.timeit('ufuncify(v, expr, backend="numpy")', setup=setup, number=100)
+#     t2 = timeit.timeit('ufuncify(v, expr, backend="cython")', setup=setup, number=100)
+#     print('with numpy backend', t1)
+#     print('with cython backend', t2)
 
 
 if __name__ == '__main__':

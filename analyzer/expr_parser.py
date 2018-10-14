@@ -1,8 +1,7 @@
-from typing import Tuple, Union
-
+from typing import Tuple, Union, NoReturn, Dict
 
 # TODO: пока только односимвольные имена
-variable_names = {
+variable_names: Dict[str, str] = {
     'obj': 'x',
     'control': 'u',
     'coefficient': 'a',
@@ -14,9 +13,11 @@ variable_names = {
     # 'model': 'y',  # модель
 }
 
-default_params = {
+# в mypy есть TypedDict
+# можно так T = TypedDict('T', {'key1': str, 'key2': int})
+default_params: Dict[str, Union[str, int]] = {
     'delimiter': '_',
-    'default_idx': 0
+    'default_idx': 0,
 }
 
 OPERATORS = ('+', '-', '*', '/', '**')
@@ -28,9 +29,9 @@ def parse_expr(expr: str):
     i = 0
     res = ''
     # TODO: возможно переделать x_names и u_names в списки tuples
-    x_names = {}  # ключи - индексы, значения - списки с именами или ключ - индекс, значение - (имя, тао)
-    u_names = {}  # ключи - индексы, значения - списки с именами
-    a_names = []  #
+    x_names: dict = {}  # ключи - индексы, значения - списки с именами или ключ - индекс, значение - (имя, тао)
+    u_names: dict = {}  # ключи - индексы, значения - списки с именами
+    a_names: list = []  #
 
     while i < len(expr):
         s = expr[i]
@@ -59,7 +60,7 @@ def parse_expr(expr: str):
     return res, x_names, u_names, a_names
 
 
-def parse_var(expr: str, i: int) -> Union[Exception, Tuple[str, int, int, int]]:
+def parse_var(expr: str, i: int) -> Union[NoReturn, Tuple[str, int, int, int]]:
     var_control = variable_names['control']
     var_obj = variable_names['obj']
     var_coef = variable_names['coefficient']
@@ -112,7 +113,7 @@ def parse_var(expr: str, i: int) -> Union[Exception, Tuple[str, int, int, int]]:
             raise ValueError(message)
 
 
-def parse_lag(expr: str, i: int, var_time: str) -> Union[Exception, Tuple[int, int]]:
+def parse_lag(expr: str, i: int, var_time: str) -> Union[NoReturn, Tuple[int, int]]:
     tao = 0
     start = i
     while i <= len(expr) and expr[i] != ')':
