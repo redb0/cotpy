@@ -1,9 +1,9 @@
 from typing import Union, List, Optional, NoReturn
+import operator
 
 from sympy.utilities.autowrap import ufuncify
 from sympy.core.add import Add
 import sympy as sp
-import numpy as np
 
 from analyzer.validation import check_brackets
 from analyzer.expr_parser import parse_expr
@@ -87,12 +87,12 @@ class Model:
         self._model_expr = None
         self._sp_var = []
 
-    def initialization(self, a: Matrix, x: Matrix, u: Matrix) -> Optional[NoReturn]:  # добавить тип
+    def initialization(self, a: Matrix, x: Matrix, u: Matrix) -> Optional[NoReturn]:
         self.variable_init(a, t='a')
         self.variable_init(x, t='x')
         self.variable_init(u, t='u')
 
-    def variable_init(self, values: Matrix, t='a') -> Optional[NoReturn]:  # добавить тип
+    def variable_init(self, values: Matrix, t='a') -> Optional[NoReturn]:
         if t in ['a', 'x', 'u']:
             attr = self.__getattribute__('_' + t)
             if not attr:
@@ -113,7 +113,7 @@ class Model:
         else:
             raise ValueError('t = ' + t + '. t not in ["a", "x", "u"]')
 
-    def create_variables(self, data: Union[list, dict], t: str) -> Optional[NoReturn]:  # добавить тип
+    def create_variables(self, data: Union[list, dict], t: str) -> Optional[NoReturn]:
         variables = []
         if isinstance(data, list):
             for item in data:
@@ -125,11 +125,12 @@ class Model:
                 variables.append(v)
         name_attr = '_' + t
         if name_attr in self.__dict__:
+            variables.sort(key=operator.attrgetter('_idx', '_tao'))
             self.__setattr__(name_attr, variables)
         else:
             raise ValueError('Не сущестует атрибута с именем "' + name_attr + '"')
 
-    def generate_func_grad(self) -> Optional[NoReturn]:  # добавить тип
+    def generate_func_grad(self) -> Optional[NoReturn]:
         if not self._sp_var:
             raise ValueError('Не сгенерированы sympy переменные')
         for c in self._a:
@@ -175,11 +176,11 @@ class Model:
         return self._a
 
     @property
-    def grad(self) -> List[np.ufunc]:
+    def grad(self):  # не ясен тип
         return self._grad
 
     @property
-    def func_model(self) -> np.ufunc:
+    def func_model(self):
         return self._func_model
 
 
@@ -188,6 +189,9 @@ def create_model(expr: str) -> Model:
     if check_brackets(expr, brackets='()') != -1:
         raise ValueError('Некорректно расставлены скобки')
     model_expr, x_names, u_names, a_names = parse_expr(expr)
+    print(x_names)
+    print(u_names)
+    print(a_names)
     model = Model()
     model.expr_str = expr
     model.model_expr_str = model_expr  # строковое и sympy выражения сохранены
@@ -202,8 +206,7 @@ def create_model(expr: str) -> Model:
 
 
 def main():
-    model = create_model('a_0*x(t-1)+a+2*a+cos(u(t-1))+a_1*u(t-2)')
-    # model = create_model('a_0*x(t-1)')
+    model = create_model('a_0*x1(t-1)+a_2*x2(t-1)+a_1*x1(t-2)')
 
     print(model.model_expr_str)
     print(model.model_expr)
@@ -215,19 +218,9 @@ def main():
     print(type(model.model_expr))
     print(model.model_expr)
 
-
-#     import timeit
-#     setup = """
-# from sympy.utilities.autowrap import ufuncify
-# import sympy as sp
-# expr = sp.S('a0*x0_1 + 3*a0 + a1*u0_2 + cos(u0_1)')
-# v = sp.var(['x0_1', 'u0_1', 'u0_2', 'a0', 'a1'])
-#     """
-#
-#     t1 = timeit.timeit('ufuncify(v, expr, backend="numpy")', setup=setup, number=100)
-#     t2 = timeit.timeit('ufuncify(v, expr, backend="cython")', setup=setup, number=100)
-#     print('with numpy backend', t1)
-#     print('with cython backend', t2)
+    a = [2, 3, 4]
+    x = [2, 3, 4]
+    print(model.func_model(*x, *a))
 
 
 if __name__ == '__main__':
