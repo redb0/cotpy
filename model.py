@@ -1,5 +1,6 @@
 from typing import Union, List, Optional, NoReturn
 import operator
+import itertools
 
 from sympy.utilities.autowrap import ufuncify
 from sympy.core.add import Add
@@ -7,6 +8,7 @@ import sympy as sp
 
 from analyzer.validation import check_brackets
 from analyzer.expr_parser import parse_expr
+import support
 
 
 Number = Union[int, float]
@@ -36,7 +38,7 @@ class Variable:
 
     def initialization(self, values: ListNumber) -> None:
         self._memory = len(values)
-        self._values = values.copy()
+        self._values = values  # .copy()
 
     @property
     def name(self) -> str:
@@ -57,6 +59,10 @@ class Variable:
     @property
     def values(self) -> ListNumber:
         return self._values
+
+    @values.setter
+    def values(self, val) -> None:  # TODO: типы
+        self._values = val
 
     @property
     def last_value(self) -> Number:
@@ -125,7 +131,13 @@ class Model:
                 variables.append(v)
         name_attr = '_' + t
         if name_attr in self.__dict__:
-            variables.sort(key=operator.attrgetter('_idx', '_tao'))
+            if t == 'a':
+                variables.sort(key=operator.attrgetter('_idx'))
+            else:
+                variables = [
+                    list(g) for k, g in itertools.groupby(sorted(variables, key=operator.attrgetter('_idx', '_tao')),
+                                                          operator.attrgetter('_idx'))
+                ]
             self.__setattr__(name_attr, variables)
         else:
             raise ValueError('Не сущестует атрибута с именем "' + name_attr + '"')
@@ -137,7 +149,7 @@ class Model:
             self._grad.append(ufuncify(self._sp_var, self._model_expr.diff(c.name)))
 
     def generate_sp_var(self) -> None:
-        self._sp_var = sp.var([v.name for v in [*self._x, *self._u, *self._a]])
+        self._sp_var = sp.var([v.name for v in [*support.flatten(self._x), *support.flatten(self._u), *self._a]])
 
     def generate_model_func(self) -> None:
         self._func_model = ufuncify(self._sp_var, self._model_expr)
@@ -206,21 +218,25 @@ def create_model(expr: str) -> Model:
 
 
 def main():
-    model = create_model('a_0*x1(t-1)+a_2*x2(t-1)+a_1*x1(t-2)')
+    model = create_model('a_0*x1(t-1)+a_3*x2(t-3)+a_2*x2(t-1)+a_1*x1(t-2)')
 
     print(model.model_expr_str)
     print(model.model_expr)
 
+    print('-' * 20)
+    for g in model.outputs:
+        print('group:')
+        for i in g:
+            print(i.name, i.tao)
+    print('-' * 20)
+
     print(model.inputs)
     print(model.outputs)
     print(model.coefficients)
-    print(type(model.func_model))
-    print(type(model.model_expr))
-    print(model.model_expr)
 
-    a = [2, 3, 4]
-    x = [2, 3, 4]
-    print(model.func_model(*x, *a))
+    # a = [2, 3, 4]
+    # x = [2, 3, 4]
+    # print(model.func_model(*x, *a))
 
 
 if __name__ == '__main__':
