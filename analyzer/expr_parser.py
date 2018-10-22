@@ -90,9 +90,9 @@ def parse_var(expr: str, i: int) -> Union[NoReturn, Tuple[str, int, int, int]]:
             if s in (var_control, var_obj):
                 tao, i = parse_lag(expr, i, var_time)
                 if idx != -1:
-                    name = s + str(idx) + '_' + str(tao)
+                    name = s + str(idx) + '_' + str(tao + 1)
                 else:
-                    name = s + str(default_idx) + '_' + str(tao)
+                    name = s + str(default_idx) + '_' + str(tao + 1)
                     idx = default_idx
                 return name, idx, tao, i
             elif s == var_coef:
@@ -138,7 +138,7 @@ def parse_lag(expr: str, i: int, var_time: str) -> Union[NoReturn, Tuple[int, in
                 raise ValueError(message)
 
     if expr[i] == ')':
-        return tao, i + 1
+        return tao - 1, i + 1
     message = get_error_message(expect='")"', reality=expr[i], position=i)
     raise ValueError(message)
 

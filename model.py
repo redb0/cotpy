@@ -176,11 +176,11 @@ class Model:
         return self._model_expr
 
     @property
-    def inputs(self) -> ListVars:
+    def inputs(self):  # изменить тип
         return self._u
 
     @property
-    def outputs(self) -> ListVars:
+    def outputs(self):  # изменить тип
         return self._x
 
     @property
@@ -201,9 +201,9 @@ def create_model(expr: str) -> Model:
     if check_brackets(expr, brackets='()') != -1:
         raise ValueError('Некорректно расставлены скобки')
     model_expr, x_names, u_names, a_names = parse_expr(expr)
-    print(x_names)
-    print(u_names)
-    print(a_names)
+    # print(x_names)
+    # print(u_names)
+    # print(a_names)
     model = Model()
     model.expr_str = expr
     model.model_expr_str = model_expr  # строковое и sympy выражения сохранены
@@ -233,10 +233,7 @@ def main():
     print(model.inputs)
     print(model.outputs)
     print(model.coefficients)
-
-    # a = [2, 3, 4]
-    # x = [2, 3, 4]
-    # print(model.func_model(*x, *a))
+    print([i[-1].tao for i in model.outputs])
 
 
 if __name__ == '__main__':
