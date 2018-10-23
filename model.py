@@ -29,7 +29,7 @@ class Variable:
     # TODO: возможно сделать через setter
     def add_value(self, val: Number) -> None:
         if (type(val) is not int) or (type(val) is not float):
-            raise TypeError('Некорректный тип. Ожидается int или float. type(val) = ' + str(type(val)))
+            raise TypeError(f'Некорректный тип. Ожидается int или float. type(val) = {type(val)}')
         if len(self._values) < self._memory:
             self._values.append(val)
         elif len(self._values) == self._memory:
@@ -71,6 +71,12 @@ class Variable:
     @property
     def last_value(self) -> Number:
         return self._values[-1]
+
+    def __repr__(self):
+        return f'Variable({self._name}, {self._idx}, {self._tao}, {self._memory}, {self._values})'
+
+    def __str__(self):
+        return f'Variable({self._name}, {self._idx}, tao={self._tao}, memory={self._memory}, values={self._values})'
 
 
 ListVars = List[Variable]
@@ -127,16 +133,6 @@ class GroupVariable:
     def memory(self):
         return self._memory
 
-    # @memory.setter
-    # def memory(self, value):
-    #     self._memory = value + self._min_memory
-    #
-    #     self._min_memory = value - self._max_tao
-    #     if self._min_memory > 0:
-    #         self._memory = value
-    #     else:
-    #         raise ValueError('некорректное значение memory')
-
     @property
     def variables(self):
         return self._vars
@@ -153,23 +149,26 @@ class GroupVariable:
     def max_tao(self):
         return self._max_tao
 
+    def __repr__(self):
+        return f'GroupVariable({repr(self._vars)}, {self._min_memory})'
+
+    def __str__(self):
+        return (f'(_vars={self._vars}, _max_tao={self._max_tao}, _min_memory={self._min_memory}, '
+                f'_memory={self._memory}, _values={self._values}, _group_name={self._group_name})')
+
 
 class Model:
     # TODO: документация
     def __init__(self):
         self._expr_str = ''
         self._model_expr_str = ''
-
-        self._x = []  # список экземпляров класса Variable
+        self._x = []  # список экземпляров класса GroupVariable
         self._u = []
         self._a = []  # список экземпляров класса Variable, у a tao = None всегда
 
         # функции
         self._grad = []
         self._func_model = None
-
-        # self._func_u = None  # ???
-        # self._func_obj = None  # ???
 
         # sympy выражения
         self._model_expr = None
@@ -184,29 +183,28 @@ class Model:
             self.variable_init(u, t='u', type_memory=type_memory)
 
     def variable_init(self, values: Matrix, t='a', type_memory='min') -> Optional[NoReturn]:
-        if t in ['a', 'x', 'u']:
-            attr = self.__getattribute__('_' + t)
-            if not attr:
-                raise ValueError('Не задан атрибут: ' + '_' + t)
-            if (not values) or (len(values) != len(attr)):
-                raise ValueError('len(values) != len(self._' + t + '): ' + str(len(values)) + ' != ' + str(len(attr)))
-            for i in range(len(attr)):
-                if not isinstance(values[i], list):
-                    raise TypeError('Ожидается список')
-                if t == 'a' and support.is_rect_matrix(values, sub_len=len(values[0])):
-                    attr[i].initialization(values[i])
-                elif t in ['x', 'u'] and support.is_rect_matrix(values, min_len=len(self._a)):
-                    memory = len(self._a)
-                    if type_memory == 'min':
-                        attr[i].init_values(values[i], min_memory=memory)
-                    elif type_memory == 'max':
-                        if len(values[i]) >= (memory + attr[i].max_tao):
-                            attr[i].set_min_memory(memory)
-                            attr[i].init_values(values[i])
-                        else:
-                            raise ValueError(f'Количество памяти должно быть >= {memory + attr[i].max_tao}')
-        else:
-            raise ValueError('t = ' + t + '. t not in ["a", "x", "u"]')
+        if t not in ['a', 'x', 'u']:
+            raise ValueError(f't = {t}. t not in ["a", "x", "u"]')
+        attr = self.__getattribute__('_' + t)
+        if not attr:
+            raise ValueError(f'Не задан атрибут: _{t}')
+        if (not values) or (len(values) != len(attr)):
+            raise ValueError(f'len(values) != len(self._{t}): {len(values)} != {len(attr)}')
+        for i in range(len(attr)):
+            if not isinstance(values[i], list):
+                raise TypeError('Ожидается список')
+            if t == 'a' and support.is_rect_matrix(values, sub_len=len(values[0])):
+                attr[i].initialization(values[i])
+            elif t in ['x', 'u'] and support.is_rect_matrix(values, min_len=len(self._a)):
+                memory = len(self._a)
+                if type_memory == 'min':
+                    attr[i].init_values(values[i], min_memory=memory)
+                elif type_memory == 'max':
+                    if len(values[i]) >= (memory + attr[i].max_tao):
+                        attr[i].set_min_memory(memory)
+                        attr[i].init_values(values[i])
+                    else:
+                        raise ValueError(f'Количество памяти должно быть >= {memory + attr[i].max_tao}')
 
     def create_variables(self, data: Union[list, dict], t: str) -> Optional[NoReturn]:
         variables = []
@@ -230,7 +228,7 @@ class Model:
                 ]
             self.__setattr__(name_attr, variables)
         else:
-            raise ValueError('Не сущестует атрибута с именем "' + name_attr + '"')
+            raise ValueError(f'Не сущестует атрибута с именем "{name_attr}"')
 
     def generate_func_grad(self) -> Optional[NoReturn]:
         if not self._sp_var:
@@ -337,6 +335,12 @@ class Model:
     def func_model(self):
         return self._func_model
 
+    def __repr__(self):
+        pass
+
+    def __str__(self):
+        pass
+
 
 def create_model(expr: str) -> Model:
     # TODO: документация
@@ -358,17 +362,14 @@ def create_model(expr: str) -> Model:
 
 def main():
     model = create_model('a_0*x1(t-1)+a_3*x2(t-3)+a_2*x2(t-1)+a_1*x1(t-2)')
-
     print(model.model_expr_str)
     print(model.model_expr)
-
     print('-' * 20)
     for g in model.outputs:
         print('group:', g.group_name)
         for i in g.variables:
             print(i.name, i.tao)
     print('-' * 20)
-
     print(model.inputs)
     print(model.outputs)
     print(model.coefficients)
@@ -376,8 +377,7 @@ def main():
 
     a = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 0, 1, 2], [3, 4, 5, 6]]
     x = [[1, 2, 3, 4], [5, 6, 7, 8]]
-    u = []
-    model.initialization(a, x, u, type_memory='min')
+    model.initialization(a, x, [], type_memory='min')
     print(model.a_values)
     print(model.x_values)
     print(model.u_values)
