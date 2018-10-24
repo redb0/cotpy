@@ -40,9 +40,16 @@ class Variable:
         self._memory = len(values)
         self._values = values  # .copy()
 
+    def init_zeros(self, n):
+        self._memory = n
+        self._values = [0. for _ in range(n)]
+
     def update(self, new_val: Number) -> None:
         self._values[:-1] = self._values[1:]
         self._values[-1] = new_val
+
+    def get_value(self):
+        return self._values[-self._tao]
 
     @property
     def name(self) -> str:
@@ -73,10 +80,11 @@ class Variable:
         return self._values[-1]
 
     def __repr__(self):
-        return f'Variable({self._name}, {self._idx}, {self._tao}, {self._memory}, {self._values})'
+        return f'Variable({repr(self._name)}, {self._idx}, {self._tao}, {self._memory}, {self._values})'
 
     def __str__(self):
-        return f'Variable({self._name}, {self._idx}, tao={self._tao}, memory={self._memory}, values={self._values})'
+        return (f'Variable({repr(self._name)}, {self._idx}, '
+                f'tao={self._tao}, memory={self._memory}, values={self._values})')
 
 
 ListVars = List[Variable]
@@ -109,7 +117,7 @@ class GroupVariable:
             # заполнить значения
             if self._memory > len_val >= self._min_memory:
                 # дополняем нулями
-                self._values = val.copy() + [0. for _ in range(self._memory - len_val)]
+                self._values = [0. for _ in range(self._memory - len_val)] + val.copy()
                 for v in self._vars:
                     v.values = self._values
             elif len_val == self._memory:
@@ -174,37 +182,51 @@ class Model:
         self._model_expr = None
         self._sp_var = []
 
-    def initialization(self, a: Matrix, x: Matrix, u: Matrix, type_memory='min') -> Optional[NoReturn]:
-        if a:
-            self.variable_init(a, t='a', type_memory=type_memory)
-        if x:
-            self.variable_init(x, t='x', type_memory=type_memory)
-        if u:
-            self.variable_init(u, t='u', type_memory=type_memory)
+    def initialization(self, a: Matrix=None, x: Matrix=None, u: Matrix=None, type_memory='min') -> Optional[NoReturn]:
+        if self._a:
+            if a:
+                self.variable_init(a, t='a', type_memory=type_memory)
+            else:
+                self.variable_init(t='a')
+        if self._x:
+            if x:
+                self.variable_init(x, t='x', type_memory=type_memory)
+            else:
+                self.variable_init(t='x')
+        if self._u:
+            if u:
+                self.variable_init(u, t='u', type_memory=type_memory)
+            else:
+                self.variable_init(t='u')
 
-    def variable_init(self, values: Matrix, t='a', type_memory='min') -> Optional[NoReturn]:
+    def variable_init(self, values: Matrix=None, t='a', type_memory='min') -> Optional[NoReturn]:
         if t not in ['a', 'x', 'u']:
             raise ValueError(f't = {t}. t not in ["a", "x", "u"]')
         attr = self.__getattribute__('_' + t)
         if not attr:
             raise ValueError(f'Не задан атрибут: _{t}')
-        if (not values) or (len(values) != len(attr)):
-            raise ValueError(f'len(values) != len(self._{t}): {len(values)} != {len(attr)}')
+        if values and (len(values) != len(attr)):
+            raise ValueError(f'Передан некорректный массив. len(values) != len(self._{t}): {len(values)} != {len(attr)}')
+
+        memory = len(self._a)
         for i in range(len(attr)):
-            if not isinstance(values[i], list):
-                raise TypeError('Ожидается список')
-            if t == 'a' and support.is_rect_matrix(values, sub_len=len(values[0])):
-                attr[i].initialization(values[i])
-            elif t in ['x', 'u'] and support.is_rect_matrix(values, min_len=len(self._a)):
-                memory = len(self._a)
-                if type_memory == 'min':
-                    attr[i].init_values(values[i], min_memory=memory)
-                elif type_memory == 'max':
-                    if len(values[i]) >= (memory + attr[i].max_tao):
-                        attr[i].set_min_memory(memory)
-                        attr[i].init_values(values[i])
-                    else:
-                        raise ValueError(f'Количество памяти должно быть >= {memory + attr[i].max_tao}')
+            if values:
+                if t == 'a' and support.is_rect_matrix(values, sub_len=len(values[0])):
+                    attr[i].initialization(values[i])
+                elif t in ['x', 'u'] and support.is_rect_matrix(values, min_len=memory):
+                    if type_memory == 'min':
+                        attr[i].init_values(values[i], min_memory=memory)
+                    elif type_memory == 'max':
+                        if len(values[i]) >= (memory + attr[i].max_tao):
+                            attr[i].set_min_memory(memory)
+                            attr[i].init_values(values[i])
+                        else:
+                            raise ValueError(f'Количество памяти должно быть >= {memory + attr[i].max_tao}')
+            else:
+                if t == 'a':
+                    attr[i].init_zeros(memory)
+                elif t in ['x', 'u']:
+                    attr[i].init_zeros(min_memory=memory)
 
     def create_variables(self, data: Union[list, dict], t: str) -> Optional[NoReturn]:
         variables = []
@@ -243,9 +265,27 @@ class Model:
     def generate_model_func(self) -> None:
         self._func_model = ufuncify(self._sp_var, self._model_expr)
 
+    def get_grad_value(self, *args):
+        return [f(*args) for f in self._grad]
+
+    def update_data(self, a=None, u=None, x=None):
+        if self._a:
+            if a is not None:
+                self.update_a(a)
+            else:
+                raise AttributeError(f'Требуется обновление коэффициентов. Передано значение: {a}')
+        if self._x:
+            if x is not None:
+                self.update_x(x)
+            else:
+                raise AttributeError(f'Требуется обновление коэффициентов. Передано значение: {x}')
+        if self._u:
+            if u is not None:
+                self.update_u(u)
+            else:
+                raise AttributeError(f'Требуется обновление коэффициентов. Передано значение: {u}')
+
     def update_a(self, a) -> None:
-        if not self._a:
-            raise AttributeError(f'Атрибут _a не задан')
         len_a = len(self._a)
         if len(a) != len_a:
             raise ValueError(f'Длина массива {a} должна быть = {len_a}. {len_a} != {len(a)}')
@@ -253,8 +293,6 @@ class Model:
             self._a[i].update(a[i])
 
     def update_x(self, val) -> None:
-        if not self._x:
-            raise AttributeError(f'Атрибут _x не задан')
         len_x = len(self._x)
         if len_x != len(val):
             raise ValueError(f'Длина массива {val} должна быть = {len_x}. {len_x} != {len(val)}')
@@ -262,8 +300,6 @@ class Model:
             self._x[i].update(val[i])
 
     def update_u(self, val) -> None:
-        if not self._u:
-            raise AttributeError(f'Атрибут _u не задан')
         len_u = len(self._u)
         if len_u != len(val):
             raise ValueError(f'Длина массива {val} должна быть = {len_u}. {len_u} != {len(val)}')
