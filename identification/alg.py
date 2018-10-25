@@ -1,13 +1,20 @@
 from abc import abstractmethod
 import numpy as np
 
+import support
+
+_alias_map = {
+    'gamma': ['g'],
+    'gamma_type': ['gt']
+}
+
 
 class Algorithm:
     def __init__(self):
         pass
 
     @abstractmethod
-    def find_a(self, identifier, method, *args, **kwargs):
+    def update(self, *args, **kwargs):
         pass
 
 
@@ -15,7 +22,7 @@ class LSM(Algorithm):
     def __init__(self):
         super().__init__()
 
-    def find_a(self, identifier, method, *args, **kwargs):
+    def update(self, *args, **kwargs):
         pass
 
 
@@ -23,50 +30,39 @@ class Robust(Algorithm):
     def __init__(self):
         super().__init__()
 
-    def find_a(self, identifier, method, *args, **kwargs):
+    def update(self, *args, **kwargs):
         pass
 
 
 class Adaptive(Algorithm):
-    def __init__(self):
+    def __init__(self, identifier, method='smp'):
         super().__init__()
+        self._identifier = identifier
+        self._method = method
 
-    @staticmethod
-    def find_a(identifier, method, *args, **kwargs):
-        if method == 'simplest' or method == 'smp':
-            g_type = 'factor'
-            g = 1
-            obj_val = None
-            u_n = None
-            if args and len(args) >= 2:
-                obj_val = args[0]
-                u_n = args[1]
-            elif 'obj_val' in kwargs:
-                obj_val = kwargs['obj_val']
-            else:
-                raise AttributeError('Не передано значение объекта')
-            if 'g' in kwargs:
-                g = kwargs['g']
-            elif 'gamma' in kwargs:
-                g = kwargs['g']
-            if 'gt' in kwargs:
-                g_type = kwargs['gt']
-            elif 'g_type' in kwargs:
-                g_type = kwargs['g_type']
+    def update(self, outputs_val, inputs_val, **kwargs):  # outputs_val(obj_val), inputs_val
+        if self._method in ['simplest', 'smp']:
+            # last_a, obj_val, grad, gamma = 1, g_type = 'factor'
+            kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
+            # if 'gamma' in kw:
+            #     g = kw['gamma']
+            # if 'gamma_type' in kw:
+            #     g_type = kw['gamma_type']
 
-            last_a = np.array(identifier.model.last_a)
+            last_a = np.array(self._identifier.model.last_a)
             print('last_a', last_a)
-            print('obj_val', obj_val)
-            grad = np.array(identifier.model.get_grad_value(*identifier.model.last_x, *u_n, *last_a))
+            print('obj_val', outputs_val)
+            grad = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x, *inputs_val, *last_a))
             print('grad', grad)
-            new_a = Adaptive.simplest(last_a, *obj_val, grad, gamma=g, g_type=g_type)
+            new_a = Adaptive.simplest(last_a, *outputs_val, grad, **kw)  # gamma=g, g_type=g_type,
+            self._identifier.update_data(a=new_a, x=outputs_val, u=inputs_val)
             return new_a
-        elif method == 'lsm':
+        elif self._method == 'lsm':
             pass
-        elif method == 'pole':
+        elif self._method == 'pole':
             pass
         else:
-            raise ValueError('Метода "' + method + '" не существует.')
+            raise ValueError('Метода "' + self._method + '" не существует.')
 
     @staticmethod
     def simplest(last_a, obj_val, grad, gamma=1, g_type='factor'):
@@ -100,5 +96,5 @@ class AdaptiveRobust(Adaptive):
     def __init__(self):
         super().__init__()
 
-    def find_a(self, identifier, method, *args, **kwargs):
+    def update(self, *args, **kwargs):
         pass

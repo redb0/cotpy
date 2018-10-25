@@ -375,7 +375,7 @@ class Model:
         pass
 
     def __str__(self):
-        pass
+        return f'Model("{self._model_expr}")'
 
 
 def create_model(expr: str) -> Model:
