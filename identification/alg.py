@@ -118,11 +118,49 @@ class Adaptive(Algorithm):   # 6.6
     def cov_matrix(self):
         pass
 
-    def lsm(self):
-        pass
+    @classmethod
+    def lsm(cls, last_a, obj_val, grad, k_matrix, weight):
+        gamma = cls.find_gamma(grad, k_matrix, weight)
+        new_k = cls.find_k_matrix(grad, gamma, k_matrix)
+        new_a = last_a + gamma @ (obj_val - grad @ last_a)
+        return new_a, new_k
 
     def pole(self):
         pass
+
+    @staticmethod
+    def find_gamma(grad, k_matrix, weight):
+        return np.dot(k_matrix, grad) / (weight + np.dot(grad.T, np.dot(k_matrix, grad)))
+
+    @staticmethod
+    def find_k_matrix(grad, gamma, last_k_matrix):
+        e = np.eye(len(gamma))
+        return (e - np.dot(gamma, grad.T)) @ last_k_matrix
+
+    @staticmethod
+    def find_initial_k(ar_grad, weight):  # TODO: доразобрать ??????
+        # 6.6.4
+        # веса как число и как массив
+        # ar_grad = [grad1, grad2, ...], grad1 = [grad_a1, grad_a2, ...]
+        weight_ar = None
+        n0 = len(ar_grad)
+        if isinstance(weight, (int, float)):
+            weight_ar = np.array([weight for _ in range(n0)])
+        elif isinstance(weight, np.ndarray):
+            weight_ar = weight
+            if len(weight) != n0:
+                raise ValueError(f'Длина списка значений весов не совпадает с длиной списка градиетов: '
+                                 f'{len(weight)} != {n0}.')
+        elif isinstance(weight, list):
+            weight_ar = np.array(weight)
+            if len(weight) != n0:
+                raise ValueError(f'Длина списка значений весов не совпадает с длиной списка градиетов: '
+                                 f'{len(weight)} != {n0}.')
+        else:
+            pass
+
+        k0 = weight_ar @ scalar_product(ar_grad.T, ar_grad, 1)
+
 
 
 class AdaptiveRobust(Adaptive):  # 6.7

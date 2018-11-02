@@ -4,9 +4,9 @@ class Identifier:
 
         # self._sigma = sigma  # сразу в алгоритм даже стартовые значения
         self._n0 = 0
-        self._n = 0
+        self._n = 0  # используется при обычном сглаживании
         self._last_cov = None
-        self._delta = 0
+        self._delta = 0  # используется при сглаживании методом экспоненциального забывания информации
         self._last_ap = None
 
     def min_numb_measurements(self):
