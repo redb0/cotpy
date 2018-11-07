@@ -41,6 +41,10 @@ class Identifier:
         return self._n
 
     @property
+    def n0(self):
+        return self._n0
+
+    @property
     def last_cov(self):
         return self._last_cov
 

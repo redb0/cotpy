@@ -363,6 +363,30 @@ class Model:
     def last_u(self):
         return [group.last_value for group in self._u]
 
+    def get_outputs_value(self, i):
+        if not self._x:
+            return []
+        if i < len(self._a):
+            return [group.values[i] for group in self._x]
+        else:
+            pass
+
+    def get_inputs_value(self, i):
+        if not self._u:
+            return []
+        if i < len(self._a):
+            return [group.values[i] for group in self._u]
+        else:
+            pass
+
+    def get_coefficients_value(self, i):
+        if not self._a:
+            return []
+        if i < len(self._a):
+            return [c.values[i] for c in self._a]
+        else:
+            pass
+
     @property
     def grad(self):  # не ясен тип
         return self._grad
