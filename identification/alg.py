@@ -10,6 +10,7 @@ _alias_map = {
     'init_n': ['n0', 'n'],
     'weight': ['w', 'p', 'sigma'],
     'init_weight': ['iw'],
+    'efi_lambda': ['efi', 'l'],
 
     'gamma': ['g'],
     'gamma_type': ['gt']
@@ -88,34 +89,26 @@ class Adaptive(Algorithm):   # 6.6
 
     def update(self, outputs_val, inputs_val, **kwargs):  # outputs_val(obj_val), inputs_val
         kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
+        last_a = np.array(self._identifier.model.last_a)
+        print('last_a', last_a)
+        print('obj_val', outputs_val)
+        grad = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x, *inputs_val, *last_a))
+        print('grad', grad)
         if self._method in ['simplest', 'smp']:
-            # last_a, obj_val, grad, gamma = 1, g_type = 'factor'
-            # if 'gamma' in kw:
-            #     g = kw['gamma']
-            # if 'gamma_type' in kw:
-            #     g_type = kw['gamma_type']
-
-            last_a = np.array(self._identifier.model.last_a)
-            print('last_a', last_a)
-            print('obj_val', outputs_val)
-            grad = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x, *inputs_val, *last_a))
-            print('grad', grad)
             new_a = Adaptive.simplest(last_a, *outputs_val, grad, **kw)  # gamma=g, g_type=g_type,
-            self._identifier.update_data(a=new_a, x=outputs_val, u=inputs_val)
+            self._identifier.model.update_x(outputs_val)
+            self._identifier.model.update_a(new_a)
             return new_a
         elif self._method == 'lsm':
-            # lsm(cls, last_a, obj_val, grad, k_matrix, weight)
-            last_a = np.array(self._identifier.model.last_a)
-            grad = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x, *inputs_val, *last_a))
-            print('last_a', last_a)
-            print('obj_val', outputs_val)
-            print('grad', grad)
             weight = 1
             init_weight = 1
+            _lambda = 1
             if 'weight' in kw:
                 weight = kw['weight']
             if 'init_weight' in kw:
                 init_weight = kw['init_weight']
+            if 'efi_lambda' in kw:
+                _lambda = kw['efi_lambda']
 
             k_matrix = self._matrix_k
             if k_matrix is None:
@@ -133,10 +126,9 @@ class Adaptive(Algorithm):   # 6.6
                     # TODO: добавить автоматическое заполнение
                     raise ValueError('Не проведена инициализация начальных значений.')
 
-            new_a, self._matrix_k = Adaptive.lsm(last_a, *outputs_val, grad, k_matrix, weight)
+            new_a, self._matrix_k = Adaptive.lsm(last_a, *outputs_val, grad, k_matrix, weight, _lambda)
             self._identifier.model.update_x(outputs_val)
             self._identifier.model.update_a(new_a)
-            # self._identifier.update_data(a=new_a, x=outputs_val, u=inputs_val)
             return new_a
 
         elif self._method == 'pole':
@@ -166,9 +158,9 @@ class Adaptive(Algorithm):   # 6.6
         pass
 
     @classmethod
-    def lsm(cls, last_a, obj_val, grad, k_matrix, weight):
-        gamma = cls.find_gamma(grad, k_matrix, weight)
-        new_k = cls.find_k_matrix(grad, gamma, k_matrix)
+    def lsm(cls, last_a, obj_val, grad, k_matrix, weight, _lambda=1):
+        gamma = cls.find_gamma(grad, k_matrix, weight, _lambda)
+        new_k = cls.find_k_matrix(grad, gamma, k_matrix, _lambda)
         new_a = last_a + gamma * (obj_val - grad @ last_a)
         return new_a, new_k
 
@@ -176,18 +168,18 @@ class Adaptive(Algorithm):   # 6.6
         pass
 
     @staticmethod
-    def find_gamma(grad, k_matrix, weight):
-        return np.dot(k_matrix, grad) / (weight + np.dot(grad.T, np.dot(k_matrix, grad)))
+    def find_gamma(grad, k_matrix, weight, _lambda=1):
+        return np.dot(k_matrix, grad) / (weight * _lambda + np.dot(grad.T, np.dot(k_matrix, grad)))
 
     @staticmethod
-    def find_k_matrix(grad, gamma, last_k_matrix):
+    def find_k_matrix(grad, gamma, last_k_matrix, _lambda=1):
         e = np.eye(len(gamma))
-        return (e - np.dot(gamma, grad.T)) @ last_k_matrix
+        return ((e - np.dot(gamma[None, :].T, grad[None, :])) @ last_k_matrix) * (1 / _lambda)
 
     @staticmethod
     def find_initial_k(ar_grad, weight):
         # 6.6.4
-        # weight должен быть в виде 1/(s^2)
+        # weight должен быть в виде (s^2)
         # веса как число и как массив
         # ar_grad = [grad1, grad2, ...], grad1 = [grad_a1, grad_a2, ...]
         weight_ar = None
@@ -207,7 +199,7 @@ class Adaptive(Algorithm):   # 6.6
         else:
             raise TypeError('Аргумент weight некорректного типа.')
 
-        k = weight_ar * ar_grad.T @ ar_grad
+        k = (1 / weight_ar) * ar_grad.T @ ar_grad
         return k  # np.linalg.inv(k)
 
 
