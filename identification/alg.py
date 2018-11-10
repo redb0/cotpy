@@ -12,6 +12,8 @@ _alias_map = {
     'init_weight': ['iw'],
     'efi_lambda': ['efi', 'l'],
 
+    'init_ah': ['ah'],
+
     'gamma': ['g'],
     'gamma_type': ['gt']
 }
@@ -87,7 +89,10 @@ class Adaptive(Algorithm):   # 6.6
         self._matrix_k = None if 'k0' not in kw else kw['k0']  # на старте k0 далее k
         self._n0 = None if 'init_n' not in kw else kw['init_n']  # начальное кол-во измерений >= кол-ву alpha
 
+        self._last_ah = None if 'init_ah' not in kw else kw['init_ah']
+
     def update(self, outputs_val, inputs_val, **kwargs):  # outputs_val(obj_val), inputs_val
+        # TODO: возможно убрать inputs_val
         kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
         last_a = np.array(self._identifier.model.last_a)
         print('last_a', last_a)
@@ -96,8 +101,8 @@ class Adaptive(Algorithm):   # 6.6
         print('grad', grad)
         if self._method in ['simplest', 'smp']:
             new_a = Adaptive.simplest(last_a, *outputs_val, grad, **kw)  # gamma=g, g_type=g_type,
-            self._identifier.model.update_x(outputs_val)
-            self._identifier.model.update_a(new_a)
+            self._identifier.update_x(outputs_val)
+            self._identifier.update_a(new_a)
             return new_a
         elif self._method == 'lsm':
             weight = 1
@@ -126,13 +131,35 @@ class Adaptive(Algorithm):   # 6.6
                     # TODO: добавить автоматическое заполнение
                     raise ValueError('Не проведена инициализация начальных значений.')
 
-            new_a, self._matrix_k = Adaptive.lsm(last_a, *outputs_val, grad, k_matrix, weight, _lambda)
-            self._identifier.model.update_x(outputs_val)
-            self._identifier.model.update_a(new_a)
+            model_val = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *last_a)
+
+            new_a, self._matrix_k = Adaptive.lsm(last_a, *outputs_val, model_val, grad, k_matrix, weight, _lambda)
+            self._identifier.update_x(outputs_val)
+            self._identifier.update_a(new_a)
             return new_a
 
         elif self._method == 'pole':
-            pass
+            weight = 1
+            gamma = 1
+            if 'weight' in kw:
+                weight = kw['weight']
+            if 'gamma' in kw:
+                gamma = kw['gamma']
+            # last_a, obj_val, last_ah, grad_ah, model_ah, weight, n, gamma
+            if self._last_ah is None:
+                self._last_ah = np.array([1 for _ in range(len(last_a))])
+            grad_ah = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x,
+                                                                     *inputs_val, *self._last_ah))
+            model_ah = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *self._last_ah)
+            # grad_ah = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x,
+            #                                                          *inputs_val, *last_a))
+            # model_ah = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *last_a)
+            print('model_ah', model_ah)
+            n = self._identifier.n
+            new_a, self._last_ah = Adaptive.pole(last_a, *outputs_val, self._last_ah, grad_ah, model_ah, weight, n, gamma)
+            self._identifier.update_x(outputs_val)
+            self._identifier.update_a(new_a)
+            return new_a
         else:
             raise ValueError('Метода "' + self._method + '" не существует.')
 
@@ -154,18 +181,24 @@ class Adaptive(Algorithm):   # 6.6
         new_a = last_a + fraction * grad  # вектор
         return new_a
 
-    def cov_matrix(self):
-        pass
+    # def cov_matrix(self):
+    #     pass
 
     @classmethod
-    def lsm(cls, last_a, obj_val, grad, k_matrix, weight, _lambda=1):
+    def lsm(cls, last_a, obj_val, model_val, grad, k_matrix, weight, _lambda=1):
         gamma = cls.find_gamma(grad, k_matrix, weight, _lambda)
         new_k = cls.find_k_matrix(grad, gamma, k_matrix, _lambda)
-        new_a = last_a + gamma * (obj_val - grad @ last_a)
+        new_a = last_a + gamma * (obj_val - model_val)  # grad @ last_a
         return new_a, new_k
 
-    def pole(self):
-        pass
+    @staticmethod
+    def pole(last_a, obj_val, last_ah, grad_ah, model_ah, weight, n, gamma):
+        _gamma = gamma * np.power(n, -1/2)
+        print('gamma =', _gamma)
+        new_ah = last_ah + _gamma * (1 / weight) * grad_ah * (obj_val - model_ah)
+        print('new_ah =', new_ah)
+        new_a = last_a + (1 / n) * (new_ah - last_a)
+        return new_a, new_ah
 
     @staticmethod
     def find_gamma(grad, k_matrix, weight, _lambda=1):

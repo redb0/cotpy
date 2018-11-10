@@ -102,7 +102,7 @@ def parse_var(expr: str, i: int) -> Union[NoReturn, Tuple[str, int, int, int]]:
             message = get_error_message(reality=expr[i], position=i)
             raise ValueError(message)
 
-    if i >= len(expr):
+    if i >= len(expr) or expr[i] == ')':
         if s == var_coef:
             if idx == -1:
                 idx = default_idx  # last_idx + 1

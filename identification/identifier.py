@@ -4,7 +4,7 @@ class Identifier:
 
         # self._sigma = sigma  # сразу в алгоритм даже стартовые значения
         self._n0 = 0
-        self._n = 0  # используется при обычном сглаживании
+        self._n = 1  # используется при обычном сглаживании
         self._last_cov = None
         self._delta = 0  # используется при сглаживании методом экспоненциального забывания информации
         self._last_ap = None
@@ -18,6 +18,16 @@ class Identifier:
     def update_data(self, a, u, x):
         self._model.update_data(a, u, x)
         self._n += 1
+
+    def update_a(self, a):
+        self._model.update_a(a)
+        self._n += 1
+
+    def update_u(self, u):
+        self._model.update_u(u)
+
+    def update_x(self, x):
+        self._model.update_x(x)
 
     def init_data(self, a=None, x=None, u=None, type_memory='min'):
         self._model.initialization(a, x, u, type_memory=type_memory)
