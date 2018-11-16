@@ -5,15 +5,12 @@ import support
 
 _alias_map = {
     'method': ['m'],
-
     'k0': ['k', 'k_matrix'],
     'init_n': ['n0', 'n'],
     'weight': ['w', 'p', 'sigma'],
     'init_weight': ['iw'],
     'efi_lambda': ['efi', 'l'],
-
     'init_ah': ['ah'],
-
     'gamma': ['g'],
     'gamma_type': ['gt']
 }
@@ -33,9 +30,6 @@ def scalar_product(m1, m2, weight):  # orthogonality_matrix=None
         raise TypeError('Неверный тип аргумента weight. необходим int, float, ndarray.')
 
     k = (m1 * (1 / weight)) @ m2  # (ar_grad.T * weight) @ ar_grad
-    # if orthogonality_matrix is None:
-    #     orthogonality_matrix = np.eye(len(k))
-    # k = k * orthogonality_matrix
 
     return k
 
@@ -104,36 +98,22 @@ class Adaptive(Algorithm):   # 6.6
             self._identifier.update_x(outputs_val)
             self._identifier.update_a(new_a)
             return new_a
-        elif self._method == 'lsm':
-            weight = 1
-            init_weight = 1
-            _lambda = 1
-            if 'weight' in kw:
-                weight = kw['weight']
-            if 'init_weight' in kw:
-                init_weight = kw['init_weight']
-            if 'efi_lambda' in kw:
-                _lambda = kw['efi_lambda']
+        elif self._method == 'lsm':  # 6.6.3, 6.6.8
+            weight = 1 if 'weight' not in kw else kw['weight']
+            init_weight = 1 if 'init_weight' not in kw else kw['init_weight']
+            _lambda = 1 if 'efi_lambda' not in kw else kw['efi_lambda']
 
-            k_matrix = self._matrix_k
-            if k_matrix is None:
-                n0 = self._identifier.n0
-                if n0 != 0:
-                    ar_grad = np.zeros((n0, len(self._identifier.model.grad)))
-                    for i in range(n0):
-                        x = self._identifier.model.get_outputs_value(i)
-                        u = self._identifier.model.get_inputs_value(i)
-                        a = self._identifier.model.get_coefficients_value(i)
-                        ar_grad[i] = np.array(self._identifier.model.get_grad_value(*x, *u, *a))
-                    self._matrix_k = Adaptive.find_initial_k(ar_grad, init_weight)
-                    k_matrix = self._matrix_k
+            if self._matrix_k is None:
+                if self._identifier.n0 != 0:
+                    self.init_k_matrix(self._identifier.n0, init_weight)
                 else:
                     # TODO: добавить автоматическое заполнение
                     raise ValueError('Не проведена инициализация начальных значений.')
 
             model_val = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *last_a)
+            print('MODEL', model_val)
 
-            new_a, self._matrix_k = Adaptive.lsm(last_a, *outputs_val, model_val, grad, k_matrix, weight, _lambda)
+            new_a, self._matrix_k = Adaptive.lsm(last_a, *outputs_val, model_val, grad, self._matrix_k, weight, _lambda)
             self._identifier.update_x(outputs_val)
             self._identifier.update_a(new_a)
             return new_a
@@ -145,15 +125,11 @@ class Adaptive(Algorithm):   # 6.6
                 weight = kw['weight']
             if 'gamma' in kw:
                 gamma = kw['gamma']
-            # last_a, obj_val, last_ah, grad_ah, model_ah, weight, n, gamma
             if self._last_ah is None:
                 self._last_ah = np.array([1 for _ in range(len(last_a))])
             grad_ah = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x,
                                                                      *inputs_val, *self._last_ah))
             model_ah = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *self._last_ah)
-            # grad_ah = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x,
-            #                                                          *inputs_val, *last_a))
-            # model_ah = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *last_a)
             print('model_ah', model_ah)
             n = self._identifier.n
             new_a, self._last_ah = Adaptive.pole(last_a, *outputs_val, self._last_ah, grad_ah, model_ah, weight, n, gamma)
@@ -162,6 +138,15 @@ class Adaptive(Algorithm):   # 6.6
             return new_a
         else:
             raise ValueError('Метода "' + self._method + '" не существует.')
+
+    def init_k_matrix(self, n, init_weight):
+        ar_grad = np.zeros((n, len(self._identifier.model.grad)))
+        for i in range(n):
+            x = self._identifier.model.get_outputs_value(i)
+            u = self._identifier.model.get_inputs_value(i)
+            a = self._identifier.model.get_coefficients_value(i)
+            ar_grad[i] = np.array(self._identifier.model.get_grad_value(*x, *u, *a))
+        self._matrix_k = Adaptive.find_initial_k(ar_grad, init_weight)
 
     @staticmethod
     def simplest(last_a, obj_val, grad, gamma=1, g_type='factor'):
@@ -180,9 +165,6 @@ class Adaptive(Algorithm):   # 6.6
             raise ValueError('Gamma должна быть > 0. ' + str(gamma) + ' <= 0')
         new_a = last_a + fraction * grad  # вектор
         return new_a
-
-    # def cov_matrix(self):
-    #     pass
 
     @classmethod
     def lsm(cls, last_a, obj_val, model_val, grad, k_matrix, weight, _lambda=1):
@@ -215,7 +197,6 @@ class Adaptive(Algorithm):   # 6.6
         # weight должен быть в виде (s^2)
         # веса как число и как массив
         # ar_grad = [grad1, grad2, ...], grad1 = [grad_a1, grad_a2, ...]
-        weight_ar = None
         n0 = len(ar_grad)
         if isinstance(weight, (int, float)):
             weight_ar = np.array([weight for _ in range(n0)])
@@ -236,9 +217,49 @@ class Adaptive(Algorithm):   # 6.6
         return k  # np.linalg.inv(k)
 
 
-class AdaptiveRobust(Adaptive):  # 6.7
-    def __init__(self):
-        super().__init__()
+_cores = {  # 6.7.2
+    'module': lambda p, e, m: p * np.power(np.abs(e), 2 - m),
+    'piecewise': lambda p, e, m: p if np.abs(e) <= m else p * np.abs(e) / m
+}
 
-    def update(self, *args, **kwargs):
-        pass
+
+class AdaptiveRobust(Adaptive):  # 6.7
+    def __init__(self, identifier, **kwargs):
+        super().__init__(identifier, **kwargs)
+
+    def update(self, outputs_val, inputs_val, **kwargs):
+        kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
+        last_a = np.array(self._identifier.model.last_a)
+        grad = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x, *inputs_val, *last_a))
+        print('last_a', last_a)
+        print('obj_val', outputs_val)
+        print('grad', grad)
+        if self._method == 'lsm':  # 6.7.1
+            weight = 1 if 'weight' not in kw else kw['weight']
+            init_weight = 1 if 'init_weight' not in kw else kw['init_weight']
+            _lambda = 1 if 'efi_lambda' not in kw else kw['efi_lambda']
+            mu = 1 if 'mu' not in kw else kw['mu']
+            if ('cores' in kw) and (kw['cores'] in _cores.keys()):
+                cores_key = kw['cores']
+            else:
+                cores_key = 'module'
+            if self._matrix_k is None:
+                n0 = self._identifier.n0
+                if n0 != 0:
+                    self.init_k_matrix(self._identifier.n0, init_weight)
+                else:
+                    raise ValueError('Не проведена инициализация начальных значений.')
+
+            model_val = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *last_a)
+            print('MODEL', model_val)
+
+            e = outputs_val - model_val
+            weight = _cores[cores_key](weight, e, mu)
+            new_a, self._matrix_k = Adaptive.lsm(last_a, *outputs_val, model_val, grad, self._matrix_k, weight, _lambda)
+            self._identifier.update_x(outputs_val)
+            self._identifier.update_a(new_a)
+            return new_a
+        elif self._method == '':  # 6.7.4, 6.7.7 TODO: как то назвать
+            pass
+        elif self._method == 'pole':  # 6.7.6
+            pass

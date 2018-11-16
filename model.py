@@ -256,6 +256,7 @@ class Model:
         if not self._sp_var:
             raise ValueError('Не сгенерированы sympy переменные')
         for c in self._a:
+            print(self._model_expr.diff(c.name))
             self._grad.append(ufuncify(self._sp_var, self._model_expr.diff(c.name)))
 
     def generate_sp_var(self) -> None:
