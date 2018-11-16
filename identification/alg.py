@@ -151,7 +151,6 @@ class Adaptive(Algorithm):   # 6.6
     @staticmethod
     def simplest(last_a, obj_val, grad, gamma=1, g_type='factor'):
         # простейший адаптивный алгоритм
-        # TODO: документацию
         fraction = (obj_val - grad @ last_a)
         if gamma > 0:
             if g_type in ['factor', 'f']:
@@ -217,9 +216,13 @@ class Adaptive(Algorithm):   # 6.6
         return k  # np.linalg.inv(k)
 
 
-_cores = {  # 6.7.2
-    'module': lambda p, e, m: p * np.power(np.abs(e), 2 - m),
-    'piecewise': lambda p, e, m: p if np.abs(e) <= m else p * np.abs(e) / m
+_cores = {  # 6.7.2 (функция, производная)
+    'abs': (lambda p, e, m: p * abs(e),
+            lambda e, m: np.sign(e)),
+    'abs_pow': (lambda p, e, m: p * np.power(abs(e), 2 - m),
+                lambda e, m: np.power(abs(e), m - 1)),
+    'piecewise': (lambda p, e, m: p if abs(e) <= m else p * abs(e) / m,
+                  lambda e, m: e if abs(e) <= m else m * np.sign(e))
 }
 
 
@@ -254,12 +257,30 @@ class AdaptiveRobust(Adaptive):  # 6.7
             print('MODEL', model_val)
 
             e = outputs_val - model_val
-            weight = _cores[cores_key](weight, e, mu)
+            weight = _cores[cores_key][0](weight, e, mu)
             new_a, self._matrix_k = Adaptive.lsm(last_a, *outputs_val, model_val, grad, self._matrix_k, weight, _lambda)
             self._identifier.update_x(outputs_val)
             self._identifier.update_a(new_a)
             return new_a
-        elif self._method == '':  # 6.7.4, 6.7.7 TODO: как то назвать
+        elif self._method == 'lsm_diff':  # 6.7.4
+            pass
+        elif self._method == 'lsm_cipra':  # 6.7.7
             pass
         elif self._method == 'pole':  # 6.7.6
             pass
+
+    @classmethod
+    def lsm_diff(cls, last_a, obj_val, model_val, grad, g_matrix, kernel_func, weight, _lambda=1):  # 6.7.4
+        gamma = cls.find_gamma(grad, g_matrix, weight, _lambda)
+        new_g = cls.find_k_matrix(grad, gamma, g_matrix, _lambda)
+        new_a = last_a + gamma * kernel_func(obj_val - model_val)
+        return new_a, new_g
+
+    @classmethod
+    def lsm_cipra(cls, last_a, obj_val, model_val, grad, g_matrix, kernel_func, weight, _lambda=1):  # 6.7.7
+        sigma = 1 / (weight * _lambda + np.dot(grad.T, np.dot(g_matrix, grad)))
+        gamma = np.dot(g_matrix, grad) * sigma
+        new_g = cls.find_k_matrix(grad, gamma, g_matrix, _lambda)
+        new_a = last_a + gamma * kernel_func(sigma * (obj_val - model_val))
+        return new_a, new_g
+
