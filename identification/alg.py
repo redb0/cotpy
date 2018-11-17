@@ -2,6 +2,7 @@ from abc import abstractmethod
 import numpy as np
 
 import support
+from identification.cores import cores_dict
 
 _alias_map = {
     'method': ['m'],
@@ -112,8 +113,8 @@ class Adaptive(Algorithm):   # 6.6
 
             model_val = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *last_a)
             print('MODEL', model_val)
-
-            new_a, self._matrix_k = Adaptive.lsm(last_a, *outputs_val, model_val, grad, self._matrix_k, weight, _lambda)
+            discrepancy = outputs_val - model_val
+            new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad, self._matrix_k, weight, _lambda)
             self._identifier.update_x(outputs_val)
             self._identifier.update_a(new_a)
             return new_a
@@ -166,10 +167,10 @@ class Adaptive(Algorithm):   # 6.6
         return new_a
 
     @classmethod
-    def lsm(cls, last_a, obj_val, model_val, grad, k_matrix, weight, _lambda=1):
+    def lsm(cls, last_a, discrepancy, grad, k_matrix, weight, _lambda=1):  # obj_val, model_val
         gamma = cls.find_gamma(grad, k_matrix, weight, _lambda)
         new_k = cls.find_k_matrix(grad, gamma, k_matrix, _lambda)
-        new_a = last_a + gamma * (obj_val - model_val)  # grad @ last_a
+        new_a = last_a + gamma * discrepancy  # (obj_val - model_val)  # grad @ last_a
         return new_a, new_k
 
     @staticmethod
@@ -216,16 +217,6 @@ class Adaptive(Algorithm):   # 6.6
         return k  # np.linalg.inv(k)
 
 
-_cores = {  # 6.7.2 (функция, производная)
-    'abs': (lambda p, e, m: p * abs(e),
-            lambda e, m: np.sign(e)),
-    'abs_pow': (lambda p, e, m: p * np.power(abs(e), 2 - m),
-                lambda e, m: np.power(abs(e), m - 1)),
-    'piecewise': (lambda p, e, m: p if abs(e) <= m else p * abs(e) / m,
-                  lambda e, m: e if abs(e) <= m else m * np.sign(e))
-}
-
-
 class AdaptiveRobust(Adaptive):  # 6.7
     def __init__(self, identifier, **kwargs):
         super().__init__(identifier, **kwargs)
@@ -237,50 +228,59 @@ class AdaptiveRobust(Adaptive):  # 6.7
         print('last_a', last_a)
         print('obj_val', outputs_val)
         print('grad', grad)
-        if self._method == 'lsm':  # 6.7.1
+
+        if self._method in ('lsm', 'lsm_cipra', 'lsm_diff'):
+            _lambda = 1 if 'efi_lambda' not in kw else kw['efi_lambda']
             weight = 1 if 'weight' not in kw else kw['weight']
             init_weight = 1 if 'init_weight' not in kw else kw['init_weight']
-            _lambda = 1 if 'efi_lambda' not in kw else kw['efi_lambda']
-            mu = 1 if 'mu' not in kw else kw['mu']
-            if ('cores' in kw) and (kw['cores'] in _cores.keys()):
-                cores_key = kw['cores']
-            else:
-                cores_key = 'module'
             if self._matrix_k is None:
                 n0 = self._identifier.n0
                 if n0 != 0:
                     self.init_k_matrix(self._identifier.n0, init_weight)
                 else:
                     raise ValueError('Не проведена инициализация начальных значений.')
-
+            mu = 1 if 'mu' not in kw else kw['mu']
+            if ('cores' in kw) and (kw['cores'] in cores_dict.keys()):
+                cores_key = kw['cores']
+            else:
+                cores_key = list(cores_dict.keys())[0]
             model_val = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *last_a)
             print('MODEL', model_val)
+            discrepancy = outputs_val - model_val
+            new_a = None
+            if self._method == 'lsm':  # 6.7.1
+                e = outputs_val - model_val
+                kernel_func = cores_dict[cores_key](weight, mu, is_diff=False)
+                new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad,
+                                                     self._matrix_k, kernel_func(e), _lambda)
+            elif self._method == 'lsm_cipra':  # 6.7.7
+                kernel_func = cores_dict[cores_key](weight, mu, is_diff=True)
+                new_a, self._matrix_k = AdaptiveRobust.lsm_cipra(last_a, discrepancy, grad,
+                                                                 self._matrix_k, kernel_func, weight, _lambda)
+            elif self._method == 'lsm_diff':  # 6.7.4
+                kernel_func = cores_dict[cores_key](weight, mu, is_diff=True)
+                discrepancy = kernel_func(discrepancy)
+                new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad, self._matrix_k, weight, _lambda)
 
-            e = outputs_val - model_val
-            weight = _cores[cores_key][0](weight, e, mu)
-            new_a, self._matrix_k = Adaptive.lsm(last_a, *outputs_val, model_val, grad, self._matrix_k, weight, _lambda)
             self._identifier.update_x(outputs_val)
             self._identifier.update_a(new_a)
             return new_a
-        elif self._method == 'lsm_diff':  # 6.7.4
-            pass
-        elif self._method == 'lsm_cipra':  # 6.7.7
-            pass
+
         elif self._method == 'pole':  # 6.7.6
             pass
 
-    @classmethod
-    def lsm_diff(cls, last_a, obj_val, model_val, grad, g_matrix, kernel_func, weight, _lambda=1):  # 6.7.4
-        gamma = cls.find_gamma(grad, g_matrix, weight, _lambda)
-        new_g = cls.find_k_matrix(grad, gamma, g_matrix, _lambda)
-        new_a = last_a + gamma * kernel_func(obj_val - model_val)
-        return new_a, new_g
+    # @classmethod
+    # def lsm_diff(cls, last_a, obj_val, model_val, grad, g_matrix, kernel_func, weight, _lambda=1):  # 6.7.4
+    #     gamma = cls.find_gamma(grad, g_matrix, weight, _lambda)
+    #     new_g = cls.find_k_matrix(grad, gamma, g_matrix, _lambda)
+    #     new_a = last_a + gamma * kernel_func(obj_val - model_val)
+    #     return new_a, new_g
 
     @classmethod
-    def lsm_cipra(cls, last_a, obj_val, model_val, grad, g_matrix, kernel_func, weight, _lambda=1):  # 6.7.7
+    def lsm_cipra(cls, last_a, discrepancy, grad, g_matrix, kernel_func, weight, _lambda=1):  # 6.7.7
         sigma = 1 / (weight * _lambda + np.dot(grad.T, np.dot(g_matrix, grad)))
         gamma = np.dot(g_matrix, grad) * sigma
         new_g = cls.find_k_matrix(grad, gamma, g_matrix, _lambda)
-        new_a = last_a + gamma * kernel_func(sigma * (obj_val - model_val))
+        new_a = last_a + gamma * kernel_func(sigma * discrepancy)
         return new_a, new_g
 
