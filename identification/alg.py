@@ -133,7 +133,8 @@ class Adaptive(Algorithm):   # 6.6
             model_ah = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *self._last_ah)
             print('model_ah', model_ah)
             n = self._identifier.n
-            new_a, self._last_ah = Adaptive.pole(last_a, *outputs_val, self._last_ah, grad_ah, model_ah, weight, n, gamma)
+            discrepancy = outputs_val - model_ah
+            new_a, self._last_ah = Adaptive.pole(last_a, self._last_ah, grad_ah, discrepancy, n, gamma, weight)
             self._identifier.update_x(outputs_val)
             self._identifier.update_a(new_a)
             return new_a
@@ -174,10 +175,10 @@ class Adaptive(Algorithm):   # 6.6
         return new_a, new_k
 
     @staticmethod
-    def pole(last_a, obj_val, last_ah, grad_ah, model_ah, weight, n, gamma):
+    def pole(last_a, last_ah, grad_ah, discrepancy, n, gamma, weight=1):  # obj_val, model_ah
         _gamma = gamma * np.power(n, -1/2)
         print('gamma =', _gamma)
-        new_ah = last_ah + _gamma * (1 / weight) * grad_ah * (obj_val - model_ah)
+        new_ah = last_ah + _gamma * (1 / weight) * grad_ah * discrepancy  # (obj_val - model_ah)
         print('new_ah =', new_ah)
         new_a = last_a + (1 / n) * (new_ah - last_a)
         return new_a, new_ah
@@ -223,6 +224,11 @@ class AdaptiveRobust(Adaptive):  # 6.7
 
     def update(self, outputs_val, inputs_val, **kwargs):
         kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
+        mu = 1 if 'mu' not in kw else kw['mu']
+        if ('cores' in kw) and (kw['cores'] in cores_dict.keys()):
+            cores_key = kw['cores']
+        else:
+            cores_key = list(cores_dict.keys())[0]
         last_a = np.array(self._identifier.model.last_a)
         grad = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x, *inputs_val, *last_a))
         print('last_a', last_a)
@@ -239,11 +245,7 @@ class AdaptiveRobust(Adaptive):  # 6.7
                     self.init_k_matrix(self._identifier.n0, init_weight)
                 else:
                     raise ValueError('Не проведена инициализация начальных значений.')
-            mu = 1 if 'mu' not in kw else kw['mu']
-            if ('cores' in kw) and (kw['cores'] in cores_dict.keys()):
-                cores_key = kw['cores']
-            else:
-                cores_key = list(cores_dict.keys())[0]
+
             model_val = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *last_a)
             print('MODEL', model_val)
             discrepancy = outputs_val - model_val
@@ -267,14 +269,20 @@ class AdaptiveRobust(Adaptive):  # 6.7
             return new_a
 
         elif self._method == 'pole':  # 6.7.6
-            pass
-
-    # @classmethod
-    # def lsm_diff(cls, last_a, obj_val, model_val, grad, g_matrix, kernel_func, weight, _lambda=1):  # 6.7.4
-    #     gamma = cls.find_gamma(grad, g_matrix, weight, _lambda)
-    #     new_g = cls.find_k_matrix(grad, gamma, g_matrix, _lambda)
-    #     new_a = last_a + gamma * kernel_func(obj_val - model_val)
-    #     return new_a, new_g
+            gamma = 1 if 'gamma' not in kw else kw['gamma']
+            kernel_func = cores_dict[cores_key](1, mu, is_diff=True)
+            if self._last_ah is None:
+                self._last_ah = np.array([1 for _ in range(len(last_a))])
+            grad_ah = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x,
+                                                                     *inputs_val, *self._last_ah))
+            model_ah = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *self._last_ah)
+            print('model_ah', model_ah)
+            n = self._identifier.n
+            discrepancy = kernel_func(outputs_val - model_ah)
+            new_a, self._last_ah = Adaptive.pole(last_a, self._last_ah, grad_ah, discrepancy, n, gamma, weight=1)
+            self._identifier.update_x(outputs_val)
+            self._identifier.update_a(new_a)
+            return new_a
 
     @classmethod
     def lsm_cipra(cls, last_a, discrepancy, grad, g_matrix, kernel_func, weight, _lambda=1):  # 6.7.7
