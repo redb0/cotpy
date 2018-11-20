@@ -138,6 +138,11 @@ class GroupVariable:
         return self._values[-1]
 
     @property
+    def all_tao_values(self):
+        # хранятся в порядке возрастания tao
+        return [self._values[-(v.tao + 1)] for v in self._vars]
+
+    @property
     def memory(self):
         return self._memory
 
@@ -262,6 +267,22 @@ class Model:
     def generate_sp_var(self) -> None:
         self._sp_var = sp.var([v.name for v in [*support.flatten([g.variables for g in self._x]),
                                                 *support.flatten([g.variables for g in self._u]), *self._a]])
+
+    def get_x_values(self):
+        return [g.all_tao_values for g in self._x]  # support.flatten([g.all_tao_values for g in self._x])
+
+    def get_u_values(self):
+        return [g.all_tao_values for g in self._u]
+
+    def get_last_model_value(self):
+        return self._func_model(*support.flatten(self.get_x_values()),
+                                *support.flatten(self.get_u_values()),
+                                *self.last_a)
+
+    # def get_var_values(self):
+    #     return [*support.flatten([g.all_values for g in self._x]),
+    #             *support.flatten([g.all_values for g in self._u]),
+    #             *[a.last_value for a in self._a]]
 
     def generate_model_func(self) -> None:
         self._func_model = ufuncify(self._sp_var, self._model_expr)
@@ -425,6 +446,7 @@ def main():
     model = create_model('a_0*x1(t-1)+a_3*x2(t-3)+a_2*x2(t-1)+a_1*x1(t-2)')
     print(model.model_expr_str)
     print(model.model_expr)
+    print('SP VAR: ', model._sp_var)
     print('-' * 20)
     for g in model.outputs:
         print('group:', g.group_name)
@@ -454,6 +476,10 @@ def main():
     print(model.last_x)
     print(model.last_u)
     print('-' * 20)
+    print(model.get_x_values())
+    print(model.get_u_values())
+    print(model.get_grad_value(*support.flatten(model.get_x_values()), *support.flatten(model.get_u_values()), *model.last_a))
+    print(model.func_model(*support.flatten(model.get_x_values()), *support.flatten(model.get_u_values()), *model.last_a))
 
 
 if __name__ == '__main__':

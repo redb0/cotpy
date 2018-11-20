@@ -89,10 +89,13 @@ class Adaptive(Algorithm):   # 6.6
     def update(self, outputs_val, inputs_val, **kwargs):  # outputs_val(obj_val), inputs_val
         # TODO: возможно убрать inputs_val
         kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
-        last_a = np.array(self._identifier.model.last_a)
+        m = self._identifier.model
+        last_a = np.array(m.last_a)
         print('last_a', last_a)
         print('obj_val', outputs_val)
-        grad = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x, *inputs_val, *last_a))
+        grad = np.array(m.get_grad_value(*support.flatten(m.get_x_values()),
+                                         *support.flatten(m.get_u_values()),
+                                         *last_a))  # FIXME: проверить
         print('grad', grad)
         if self._method in ['simplest', 'smp']:
             new_a = Adaptive.simplest(last_a, *outputs_val, grad, **kw)  # gamma=g, g_type=g_type,
@@ -111,7 +114,7 @@ class Adaptive(Algorithm):   # 6.6
                     # TODO: добавить автоматическое заполнение
                     raise ValueError('Не проведена инициализация начальных значений.')
 
-            model_val = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *last_a)
+            model_val = m.get_last_model_value()  # FIXME: проверить
             print('MODEL', model_val)
             discrepancy = outputs_val - model_val
             new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad, self._matrix_k, weight, _lambda)
@@ -128,9 +131,12 @@ class Adaptive(Algorithm):   # 6.6
                 gamma = kw['gamma']
             if self._last_ah is None:
                 self._last_ah = np.array([1 for _ in range(len(last_a))])
-            grad_ah = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x,
-                                                                     *inputs_val, *self._last_ah))
-            model_ah = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *self._last_ah)
+            grad_ah = np.array(m.get_grad_value(*support.flatten(m.get_x_values()),
+                                                *support.flatten(m.get_u_values()),
+                                                *self._last_ah))
+            model_ah = m.func_model(*support.flatten(m.get_x_values()),
+                                    *support.flatten(m.get_u_values()),
+                                    *self._last_ah)
             print('model_ah', model_ah)
             n = self._identifier.n
             discrepancy = outputs_val - model_ah
@@ -229,8 +235,11 @@ class AdaptiveRobust(Adaptive):  # 6.7
             cores_key = kw['cores']
         else:
             cores_key = list(cores_dict.keys())[0]
-        last_a = np.array(self._identifier.model.last_a)
-        grad = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x, *inputs_val, *last_a))
+        m = self._identifier.model
+        last_a = np.array(m.last_a)
+        grad = np.array(m.get_grad_value(*support.flatten(m.get_x_values()),
+                                         *support.flatten(m.get_u_values()),
+                                         *last_a))
         print('last_a', last_a)
         print('obj_val', outputs_val)
         print('grad', grad)
@@ -246,7 +255,7 @@ class AdaptiveRobust(Adaptive):  # 6.7
                 else:
                     raise ValueError('Не проведена инициализация начальных значений.')
 
-            model_val = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *last_a)
+            model_val = m.get_last_model_value()
             print('MODEL', model_val)
             discrepancy = outputs_val - model_val
             new_a = None
@@ -273,9 +282,12 @@ class AdaptiveRobust(Adaptive):  # 6.7
             kernel_func = cores_dict[cores_key](1, mu, is_diff=True)
             if self._last_ah is None:
                 self._last_ah = np.array([1 for _ in range(len(last_a))])
-            grad_ah = np.array(self._identifier.model.get_grad_value(*self._identifier.model.last_x,
-                                                                     *inputs_val, *self._last_ah))
-            model_ah = self._identifier.model.func_model(*self._identifier.model.last_x, *inputs_val, *self._last_ah)
+
+            grad_ah = np.array(m.get_grad_value(*support.flatten(m.get_x_values()),
+                                                *support.flatten(m.get_u_values()),
+                                                *self._last_ah))
+            model_ah = m.func_model(*support.flatten(m.get_x_values()),
+                                    *support.flatten(m.get_u_values()), *self._last_ah)
             print('model_ah', model_ah)
             n = self._identifier.n
             discrepancy = kernel_func(outputs_val - model_ah)
