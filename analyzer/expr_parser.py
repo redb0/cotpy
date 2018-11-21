@@ -1,4 +1,4 @@
-from typing import Tuple, Union, NoReturn, Dict
+from typing import Tuple, Union, NoReturn, Dict, List
 
 # TODO: пока только односимвольные имена
 variable_names: Dict[str, str] = {
@@ -24,7 +24,7 @@ OPERATORS = ('+', '-', '*', '/', '**')
 BRAKETS = '()'
 
 
-def parse_expr(expr: str):
+def parse_expr(expr: str) -> Tuple[str, dict, dict, List[Tuple[str, int]]]:
     expr = expr.replace(' ', '')
     i = 0
     res = ''
@@ -65,8 +65,8 @@ def parse_var(expr: str, i: int) -> Union[NoReturn, Tuple[str, int, int, int]]:
     var_obj = variable_names['obj']
     var_coef = variable_names['coefficient']
     var_time = variable_names['time']
-    default_idx = default_params['default_idx']
-    delimiter = default_params['delimiter']
+    default_idx: int = default_params['default_idx']
+    delimiter: str = default_params['delimiter']
 
     s = expr[i]
     idx = -1

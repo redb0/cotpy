@@ -40,7 +40,7 @@ class Variable:
         self._memory = len(values)
         self._values = values  # .copy()
 
-    def init_zeros(self, n):
+    def init_zeros(self, n: int) -> None:
         self._memory = n
         self._values = [0. for _ in range(n)]
 
@@ -79,10 +79,10 @@ class Variable:
     def last_value(self) -> Number:
         return self._values[-1]
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'Variable({repr(self._name)}, {self._idx}, {self._tao}, {self._memory}, {self._values})'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (f'Variable({repr(self._name)}, {self._idx}, '
                 f'tao={self._tao}, memory={self._memory}, values={self._values})')
 
@@ -91,19 +91,19 @@ ListVars = List[Variable]
 
 
 class GroupVariable:
-    def __init__(self, list_var, min_memory=0):
-        self._vars = sorted(list_var, key=operator.attrgetter('_tao'))
-        self._max_tao = self._vars[-1].tao
-        self._min_memory = min_memory
-        self._memory = min_memory + self._max_tao
+    def __init__(self, list_var: ListVars, min_memory: int=0) -> None:
+        self._vars: ListVars = sorted(list_var, key=operator.attrgetter('_tao'))
+        self._max_tao: int = self._vars[-1].tao
+        self._min_memory: int = min_memory
+        self._memory: int = min_memory + self._max_tao
         self._values = None
-        self._group_name = self._vars[0].name.split('_')[0]
+        self._group_name: str = self._vars[0].name.split('_')[0]
 
     def update(self, val):
         self._values[:-1] = self._values[1:]
         self._values[-1] = val
 
-    def init_zeros(self, min_memory=0):
+    def init_zeros(self, min_memory: int=0) -> None:
         if min_memory > 0:
             self.set_min_memory(min_memory)
         val = [0. for _ in range(self._memory)]
@@ -129,7 +129,7 @@ class GroupVariable:
         else:
             raise ValueError('Не установлен минимальный размер памяти.')
 
-    def set_min_memory(self, val):
+    def set_min_memory(self, val) -> None:
         self._memory = val + self._max_tao
         self._min_memory = val
 
@@ -138,12 +138,12 @@ class GroupVariable:
         return self._values[-1]
 
     @property
-    def all_tao_values(self):
+    def all_tao_values(self):  # -> ListNumber
         # хранятся в порядке возрастания tao
         return [self._values[-(v.tao + 1)] for v in self._vars]
 
     @property
-    def memory(self):
+    def memory(self) -> int:
         return self._memory
 
     @property
@@ -155,17 +155,17 @@ class GroupVariable:
         return self._values
 
     @property
-    def group_name(self):
+    def group_name(self) -> str:
         return self._group_name
 
     @property
-    def max_tao(self):
+    def max_tao(self) -> int:
         return self._max_tao
 
-    def __repr__(self):
+    def __repr__(self) -> str:
         return f'GroupVariable({repr(self._vars)}, {self._min_memory})'
 
-    def __str__(self):
+    def __str__(self) -> str:
         return (f'(_vars={self._vars}, _max_tao={self._max_tao}, _min_memory={self._min_memory}, '
                 f'_memory={self._memory}, _values={self._values}, _group_name={self._group_name})')
 
@@ -187,7 +187,8 @@ class Model:
         self._model_expr = None
         self._sp_var = []
 
-    def initialization(self, a: Matrix=None, x: Matrix=None, u: Matrix=None, type_memory='min') -> Optional[NoReturn]:
+    def initialization(self, a: Matrix=None, x: Matrix=None, u: Matrix=None,
+                       type_memory: str='min') -> Optional[NoReturn]:
         if self._a:
             if a:
                 self.variable_init(a, t='a', type_memory=type_memory)
@@ -204,14 +205,15 @@ class Model:
             else:
                 self.variable_init(t='u')
 
-    def variable_init(self, values: Matrix=None, t='a', type_memory='min') -> Optional[NoReturn]:
+    def variable_init(self, values: Matrix=None, t: str='a', type_memory: str='min') -> Optional[NoReturn]:
         if t not in ['a', 'x', 'u']:
             raise ValueError(f't = {t}. t not in ["a", "x", "u"]')
         attr = self.__getattribute__('_' + t)
         if not attr:
             raise ValueError(f'Не задан атрибут: _{t}')
         if values and (len(values) != len(attr)):
-            raise ValueError(f'Передан некорректный массив. len(values) != len(self._{t}): {len(values)} != {len(attr)}')
+            raise ValueError(f'Передан некорректный массив. '
+                             f'len(values) != len(self._{t}): {len(values)} != {len(attr)}')
 
         memory = len(self._a)
         for i in range(len(attr)):
@@ -268,13 +270,13 @@ class Model:
         self._sp_var = sp.var([v.name for v in [*support.flatten([g.variables for g in self._x]),
                                                 *support.flatten([g.variables for g in self._u]), *self._a]])
 
-    def get_x_values(self):
-        return [g.all_tao_values for g in self._x]  # support.flatten([g.all_tao_values for g in self._x])
+    def get_x_values(self) -> List[ListNumber]:
+        return [g.all_tao_values for g in self._x]
 
-    def get_u_values(self):
+    def get_u_values(self) -> List[ListNumber]:
         return [g.all_tao_values for g in self._u]
 
-    def get_last_model_value(self):
+    def get_last_model_value(self) -> Number:
         return self._func_model(*support.flatten(self.get_x_values()),
                                 *support.flatten(self.get_u_values()),
                                 *self.last_a)
@@ -287,10 +289,10 @@ class Model:
     def generate_model_func(self) -> None:
         self._func_model = ufuncify(self._sp_var, self._model_expr)
 
-    def get_grad_value(self, *args):
+    def get_grad_value(self, *args) -> ListNumber:
         return [f(*args) for f in self._grad]
 
-    def update_data(self, a=None, u=None, x=None):
+    def update_data(self, a: ListNumber=None, u: ListNumber=None, x: ListNumber=None) -> Optional[NoReturn]:
         if self._a:
             if a is not None:
                 self.update_a(a)
@@ -307,21 +309,21 @@ class Model:
             else:
                 raise AttributeError(f'Требуется обновление коэффициентов. Передано значение: {u}')
 
-    def update_a(self, a) -> None:
+    def update_a(self, a: ListNumber) -> None:
         len_a = len(self._a)
         if len(a) != len_a:
             raise ValueError(f'Длина массива {a} должна быть = {len_a}. {len_a} != {len(a)}')
         for i in range(len_a):
             self._a[i].update(a[i])
 
-    def update_x(self, val) -> None:
+    def update_x(self, val: ListNumber) -> None:
         len_x = len(self._x)
         if len_x != len(val):
             raise ValueError(f'Длина массива {val} должна быть = {len_x}. {len_x} != {len(val)}')
         for i in range(len_x):  # группы
             self._x[i].update(val[i])
 
-    def update_u(self, val) -> None:
+    def update_u(self, val: ListNumber) -> None:
         len_u = len(self._u)
         if len_u != len(val):
             raise ValueError(f'Длина массива {val} должна быть = {len_u}. {len_u} != {len(val)}')
@@ -346,15 +348,15 @@ class Model:
         self._model_expr = sp.S(val)
 
     @property
-    def model_expr(self) -> Add:  # ПРОВЕРИТЬ
+    def model_expr(self) -> Add:
         return self._model_expr
 
     @property
-    def inputs(self):  # изменить тип
+    def inputs(self) -> List[GroupVariable]:
         return self._u
 
     @property
-    def outputs(self):  # изменить тип
+    def outputs(self) -> List[GroupVariable]:
         return self._x
 
     @property
@@ -362,30 +364,30 @@ class Model:
         return self._a
 
     @property
-    def a_values(self):
+    def a_values(self) -> List[ListNumber]:
         return [a.values for a in self._a]
 
     @property
-    def x_values(self):
+    def x_values(self) -> List[ListNumber]:
         return [g.values for g in self._x]
 
     @property
-    def u_values(self):
+    def u_values(self) -> List[ListNumber]:
         return [g.values for g in self._u]
 
     @property
-    def last_a(self):
+    def last_a(self) -> ListNumber:
         return [c.last_value for c in self._a]
 
     @property
-    def last_x(self):
+    def last_x(self) -> ListNumber:
         return [group.last_value for group in self._x]
 
     @property
-    def last_u(self):
+    def last_u(self) -> ListNumber:
         return [group.last_value for group in self._u]
 
-    def get_outputs_value(self, i):
+    def get_outputs_value(self, i: int):
         if not self._x:
             return []
         if i < len(self._a):
@@ -393,7 +395,7 @@ class Model:
         else:
             pass
 
-    def get_inputs_value(self, i):
+    def get_inputs_value(self, i: int):
         if not self._u:
             return []
         if i < len(self._a):
@@ -401,7 +403,7 @@ class Model:
         else:
             pass
 
-    def get_coefficients_value(self, i):
+    def get_coefficients_value(self, i: int):
         if not self._a:
             return []
         if i < len(self._a):
@@ -410,17 +412,17 @@ class Model:
             pass
 
     @property
-    def grad(self):  # не ясен тип
+    def grad(self):  # list[numpy.ufunc]
         return self._grad
 
     @property
-    def func_model(self):
+    def func_model(self):  # numpy.ufunc
         return self._func_model
 
     def __repr__(self):
         pass
 
-    def __str__(self):
+    def __str__(self) -> str:
         return f'Model("{self._model_expr}")'
 
 
