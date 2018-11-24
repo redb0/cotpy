@@ -1,3 +1,4 @@
+import copy
 from typing import Union, List, Optional, NoReturn
 import operator
 import itertools
@@ -9,6 +10,7 @@ import sympy as sp
 from analyzer.validation import check_brackets
 from analyzer.expr_parser import parse_expr
 import support
+from settings import variable_names
 
 
 Number = Union[int, float]
@@ -51,9 +53,51 @@ class Variable:
     def get_value(self):
         return self._values[-self._tao]
 
+    def get_tex_name(self):
+        if self.name[:len(variable_names['obj'])] == variable_names['obj']:
+            if self.tao == 0:
+                return f'{variable_names["obj"]}_{{{self._idx}}}({variable_names["time"]})'
+            return f'{variable_names["obj"]}_{{{self._idx}}}({variable_names["time"]} - {self.tao})'
+        elif self.name[:len(variable_names['control'])] == variable_names['control']:
+            if self.tao == 0:
+                return f'{variable_names["control"]}_{{{self._idx}}}({variable_names["time"]})'
+            return f'{variable_names["control"]}_{{{self._idx}}}({variable_names["time"]} - {self.tao})'
+        elif self.name[:len(variable_names['predicted_outputs'])] == variable_names['predicted_outputs']:
+            return f'{variable_names["obj"]}_{{{self._idx}}}({variable_names["time"]} + {self.tao})'
+        elif self.name[:len(variable_names['predicted_inputs'])] == variable_names['predicted_inputs']:
+            return f'{variable_names["control"]}_{{{self._idx}}}({variable_names["time"]} + {self.tao})'
+        elif self.name[:len(variable_names['coefficient'])] == variable_names['coefficient']:
+            return f'{variable_names["coefficient"]}_{{{self._idx}}}({variable_names["time"]} + {self.tao})'
+
+    def update_name_tao(self, tao):  # tao=var.tao - 1
+        if tao < 0:
+            if self.name[:len(variable_names['obj'])] == variable_names['obj']:
+                self.name = variable_names['predicted_outputs'] + self.name[len(variable_names['obj']):]
+            elif self.name[:len(variable_names['control'])] == variable_names['control']:
+                self.name = variable_names['predicted_inputs'] + self.name[len(variable_names['control']):]
+        self.update_tao(tao)
+        print(self.name, self.tao)
+
+    def copy_var(self, var):
+        self._name = var.name
+        self._tao = var.tao
+        self._idx = var.index
+        self._memory = var.memory
+        self._values = copy.copy(var.values)
+
+    def update_tao(self, new_tao):
+        self._tao = abs(new_tao)
+        items = self._name.split('_')
+        items[-1] = str(self._tao)  # self._tao + 1
+        self._name = '_'.join(items)
+
     @property
     def name(self) -> str:
         return self._name
+
+    @name.setter
+    def name(self, v):
+        self._name = v
 
     @property
     def index(self) -> int:
@@ -103,6 +147,15 @@ class GroupVariable:
         self._values[:-1] = self._values[1:]
         self._values[-1] = val
 
+    def add_var(self, var):
+        self._vars.append(var)
+        self._vars = sorted(self._vars, key=operator.attrgetter('_tao'))
+        self._max_tao: int = self._vars[-1].tao
+
+    def sorted_var(self):
+        self._vars = sorted(self._vars, key=operator.attrgetter('_tao'))
+        self._max_tao: int = self._vars[-1].tao
+
     def init_zeros(self, min_memory: int=0) -> None:
         if min_memory > 0:
             self.set_min_memory(min_memory)
@@ -139,8 +192,8 @@ class GroupVariable:
 
     @property
     def all_tao_values(self):  # -> ListNumber
-        # хранятся в порядке возрастания tao
-        return [self._values[-(v.tao + 1)] for v in self._vars]
+        # хранятся в порядке убывания tao
+        return [self._values[-v.tao] for v in self._vars]  # v.tao + 1
 
     @property
     def memory(self) -> int:
@@ -161,6 +214,10 @@ class GroupVariable:
     @property
     def max_tao(self) -> int:
         return self._max_tao
+
+    @property
+    def min_tao(self) -> int:
+        return min([v.tao for v in self._vars])
 
     def __repr__(self) -> str:
         return f'GroupVariable({repr(self._vars)}, {self._min_memory})'

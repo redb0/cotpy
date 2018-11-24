@@ -17,6 +17,7 @@ _alias_map = {
 }
 
 
+# def scalar_product(m1: np.ndarray, m2: np.ndarray, weight: Union[Number, ListNumber, np.ndarray]) -> np.ndarray: ...
 def scalar_product(m1, m2, weight):  # orthogonality_matrix=None
     # 6.3.6, 6.3.8
     n_0 = len(m1)
@@ -99,7 +100,7 @@ class Adaptive(Algorithm):   # 6.6
         print('grad', grad)
         if self._method in ['simplest', 'smp']:
             new_a = Adaptive.simplest(last_a, *outputs_val, grad, **kw)  # gamma=g, g_type=g_type,
-            self._identifier.update_x(outputs_val)
+            # self._identifier.update_x(outputs_val)
             self._identifier.update_a(new_a)
             return new_a
         elif self._method == 'lsm':  # 6.6.3, 6.6.8
@@ -118,7 +119,7 @@ class Adaptive(Algorithm):   # 6.6
             print('MODEL', model_val)
             discrepancy = outputs_val - model_val
             new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad, self._matrix_k, weight, _lambda)
-            self._identifier.update_x(outputs_val)
+            # self._identifier.update_x(outputs_val)
             self._identifier.update_a(new_a)
             return new_a
 
@@ -141,7 +142,7 @@ class Adaptive(Algorithm):   # 6.6
             n = self._identifier.n
             discrepancy = outputs_val - model_ah
             new_a, self._last_ah = Adaptive.pole(last_a, self._last_ah, grad_ah, discrepancy, n, gamma, weight)
-            self._identifier.update_x(outputs_val)
+            # self._identifier.update_x(outputs_val)
             self._identifier.update_a(new_a)
             return new_a
         else:
@@ -273,7 +274,7 @@ class AdaptiveRobust(Adaptive):  # 6.7
                 discrepancy = kernel_func(discrepancy)
                 new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad, self._matrix_k, weight, _lambda)
 
-            self._identifier.update_x(outputs_val)
+            # self._identifier.update_x(outputs_val)
             self._identifier.update_a(new_a)
             return new_a
 
@@ -292,7 +293,7 @@ class AdaptiveRobust(Adaptive):  # 6.7
             n = self._identifier.n
             discrepancy = kernel_func(outputs_val - model_ah)
             new_a, self._last_ah = Adaptive.pole(last_a, self._last_ah, grad_ah, discrepancy, n, gamma, weight=1)
-            self._identifier.update_x(outputs_val)
+            # self._identifier.update_x(outputs_val)
             self._identifier.update_a(new_a)
             return new_a
 
