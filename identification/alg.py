@@ -101,7 +101,7 @@ class Adaptive(Algorithm):   # 6.6
         if self._method in ['simplest', 'smp']:
             new_a = Adaptive.simplest(last_a, *outputs_val, grad, **kw)  # gamma=g, g_type=g_type,
             # self._identifier.update_x(outputs_val)
-            self._identifier.update_a(new_a)
+            # self._identifier.update_a(new_a)
             return new_a
         elif self._method == 'lsm':  # 6.6.3, 6.6.8
             weight = 1 if 'weight' not in kw else kw['weight']
@@ -120,7 +120,7 @@ class Adaptive(Algorithm):   # 6.6
             discrepancy = outputs_val - model_val
             new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad, self._matrix_k, weight, _lambda)
             # self._identifier.update_x(outputs_val)
-            self._identifier.update_a(new_a)
+            # self._identifier.update_a(new_a)
             return new_a
 
         elif self._method == 'pole':
@@ -143,7 +143,7 @@ class Adaptive(Algorithm):   # 6.6
             discrepancy = outputs_val - model_ah
             new_a, self._last_ah = Adaptive.pole(last_a, self._last_ah, grad_ah, discrepancy, n, gamma, weight)
             # self._identifier.update_x(outputs_val)
-            self._identifier.update_a(new_a)
+            # self._identifier.update_a(new_a)
             return new_a
         else:
             raise ValueError('Метода "' + self._method + '" не существует.')
@@ -275,7 +275,7 @@ class AdaptiveRobust(Adaptive):  # 6.7
                 new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad, self._matrix_k, weight, _lambda)
 
             # self._identifier.update_x(outputs_val)
-            self._identifier.update_a(new_a)
+            # self._identifier.update_a(new_a)
             return new_a
 
         elif self._method == 'pole':  # 6.7.6
@@ -294,7 +294,7 @@ class AdaptiveRobust(Adaptive):  # 6.7
             discrepancy = kernel_func(outputs_val - model_ah)
             new_a, self._last_ah = Adaptive.pole(last_a, self._last_ah, grad_ah, discrepancy, n, gamma, weight=1)
             # self._identifier.update_x(outputs_val)
-            self._identifier.update_a(new_a)
+            # self._identifier.update_a(new_a)
             return new_a
 
     @classmethod

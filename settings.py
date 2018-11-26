@@ -8,6 +8,7 @@ variable_names: Dict[str, str] = {
 
     'predicted_outputs': 'xp',
     'predicted_inputs': 'up',
+    'trajectory': 'xt',  # 'desired_output': 'xd',
 
     'error': 'e',  # ошибка
     'unknown_impact': 'h',  # неизвестное воздействие
