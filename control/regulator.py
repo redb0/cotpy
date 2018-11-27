@@ -1,5 +1,6 @@
 import copy
 
+import numpy as np
 import sympy as sp
 from sympy.utilities.autowrap import ufuncify
 
@@ -29,7 +30,35 @@ class Regulator:
         self._args_in_func = []
 
     def update(self, output, desired_output, *args, **kwargs):
-        pass
+        x_val = []
+        xs = self._model.outputs
+        for i in range(len(self._predicted_x)):
+            v = self._predicted_x[i].variables
+            for j in range(len(v)):
+                if v[j].tao != 0:
+                    x_val.append(xs[i].values[-v[j].tao])
+        print('Значения x', x_val)
+        u_val = []
+        us = self._model.outputs
+        for i in range(len(self._predicted_u)):
+            v = self._predicted_u[i].variables
+            for j in range(len(v)):
+                if v[j].tao != 0:
+                    u_val.append(us[i].values[-v[j].tao])
+        print('Значения u', u_val)
+        print('x(t)', output)
+        print('xt', desired_output)
+        last_a = np.array(self._model.last_a)
+        print('a', last_a)
+
+        if isinstance(output, (int, float)) and len(self._predicted_x) == 1:
+            if isinstance(desired_output, (int, float)):
+                desired_output = [desired_output]
+            return self._regulator_func(*desired_output, output, *x_val, *u_val, *last_a)
+        elif isinstance(output, (list, np.ndarray)) and len(self._predicted_x) > 1:
+            return self._regulator_func(*desired_output, *output, *x_val, *u_val, *last_a)
+        else:
+            TypeError(f'Аргумент output некорректного типа: {type(output)}.')
 
     def forecast_one_step(self):
         # скопировать группы x и u из модели
@@ -81,12 +110,16 @@ class Regulator:
             if step == 0:
                 self._base_vars = (copy.deepcopy(self._predicted_x), copy.deepcopy(self._predicted_u))
             step += 1
-        # sp_vars_x_current = sp.var([i[0].name for i in (g.variables for g in self._predicted_x)])
-        sp_vars_x = sp.var([i.name for i in support.flatten([g.variables for g in self._predicted_x])])
+
+        sp_vars_x_current = sp.var([i[0].name for i in (g.variables for g in self._predicted_x) if i[0].tao == 0])
+        print('current:', sp_vars_x_current)
+
+        sp_vars_x = sp.var([i.name for i in support.flatten([g.variables for g in self._predicted_x]) if i.tao != 0])
+        print('x:', sp_vars_x)
         sp_vars_u = sp.var([i.name for i in support.flatten([g.variables for g in self._predicted_u])])
         sp_vars_a = sp.var([i.name for i in self._model.coefficients])
 
-        self._args = [self._desired_output_sp, *sp_vars_x, *sp_vars_u[1:], *sp_vars_a]  # *sp_vars_x_current
+        self._args = [self._desired_output_sp, *sp_vars_x_current, *sp_vars_x, *sp_vars_u[1:], *sp_vars_a]  # *sp_vars_x_current
         print('Аргументы:', self._args)
 
         expr = sp.solve(self._expr - self._desired_output_sp, sp_vars_u[0])
@@ -136,11 +169,10 @@ def main():
 
     print('-'*20)
     r = Regulator(m)
-    # r.forecast_one_step()
     print('-' * 30)
-    # r.forecast_one_step()
     r.synthesis()
-    # print(r.func(5, 1, 2, 3))
+    u = r.update(5, 10)
+    print(u)
 
 
 if __name__ == '__main__':
