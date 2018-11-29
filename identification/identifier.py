@@ -29,7 +29,7 @@ class Identifier:
     def update_x(self, x):
         self._model.update_x(x)
 
-    def init_data(self, a=None, x=None, u=None, type_memory='min'):
+    def init_data(self, a=None, x=None, u=None, type_memory='max'):
         self._model.initialization(a, x, u, type_memory=type_memory)
         if a:
             self._n0 = len(a[0])

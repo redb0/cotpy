@@ -92,16 +92,11 @@ class Adaptive(Algorithm):   # 6.6
         kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
         m = self._identifier.model
         last_a = np.array(m.last_a)
-        print('last_a', last_a)
-        print('obj_val', outputs_val)
         grad = np.array(m.get_grad_value(*support.flatten(m.get_x_values()),
                                          *support.flatten(m.get_u_values()),
                                          *last_a))  # FIXME: проверить
-        print('grad', grad)
         if self._method in ['simplest', 'smp']:
             new_a = Adaptive.simplest(last_a, *outputs_val, grad, **kw)  # gamma=g, g_type=g_type,
-            # self._identifier.update_x(outputs_val)
-            # self._identifier.update_a(new_a)
             return new_a
         elif self._method == 'lsm':  # 6.6.3, 6.6.8
             weight = 1 if 'weight' not in kw else kw['weight']
@@ -116,11 +111,8 @@ class Adaptive(Algorithm):   # 6.6
                     raise ValueError('Не проведена инициализация начальных значений.')
 
             model_val = m.get_last_model_value()  # FIXME: проверить
-            print('MODEL', model_val)
             discrepancy = outputs_val - model_val
             new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad, self._matrix_k, weight, _lambda)
-            # self._identifier.update_x(outputs_val)
-            # self._identifier.update_a(new_a)
             return new_a
 
         elif self._method == 'pole':
@@ -138,23 +130,20 @@ class Adaptive(Algorithm):   # 6.6
             model_ah = m.func_model(*support.flatten(m.get_x_values()),
                                     *support.flatten(m.get_u_values()),
                                     *self._last_ah)
-            print('model_ah', model_ah)
             n = self._identifier.n
             discrepancy = outputs_val - model_ah
             new_a, self._last_ah = Adaptive.pole(last_a, self._last_ah, grad_ah, discrepancy, n, gamma, weight)
-            # self._identifier.update_x(outputs_val)
-            # self._identifier.update_a(new_a)
             return new_a
         else:
             raise ValueError('Метода "' + self._method + '" не существует.')
 
     def init_k_matrix(self, n, init_weight):
-        ar_grad = np.zeros((n, len(self._identifier.model.grad)))
+        m = self._identifier.model
+        ar_grad = np.zeros((n, len(m.grad)))
         for i in range(n):
-            x = self._identifier.model.get_outputs_value(i)
-            u = self._identifier.model.get_inputs_value(i)
-            a = self._identifier.model.get_coefficients_value(i)
-            ar_grad[i] = np.array(self._identifier.model.get_grad_value(*x, *u, *a))
+            ar_grad[i] = np.array(m.get_grad_value(*support.flatten(m.get_x_values(n=i)),
+                                                   *support.flatten(m.get_u_values(n=i)),
+                                                   *np.array(m.get_coefficients_value(i))))
         self._matrix_k = Adaptive.find_initial_k(ar_grad, init_weight)
 
     @staticmethod
@@ -184,9 +173,9 @@ class Adaptive(Algorithm):   # 6.6
     @staticmethod
     def pole(last_a, last_ah, grad_ah, discrepancy, n, gamma, weight=1):  # obj_val, model_ah
         _gamma = gamma * np.power(n, -1/2)
-        print('gamma =', _gamma)
+        # print('gamma =', _gamma)
         new_ah = last_ah + _gamma * (1 / weight) * grad_ah * discrepancy  # (obj_val - model_ah)
-        print('new_ah =', new_ah)
+        # print('new_ah =', new_ah)
         new_a = last_a + (1 / n) * (new_ah - last_a)
         return new_a, new_ah
 
@@ -241,9 +230,6 @@ class AdaptiveRobust(Adaptive):  # 6.7
         grad = np.array(m.get_grad_value(*support.flatten(m.get_x_values()),
                                          *support.flatten(m.get_u_values()),
                                          *last_a))
-        print('last_a', last_a)
-        print('obj_val', outputs_val)
-        print('grad', grad)
 
         if self._method in ('lsm', 'lsm_cipra', 'lsm_diff'):
             _lambda = 1 if 'efi_lambda' not in kw else kw['efi_lambda']
@@ -257,7 +243,6 @@ class AdaptiveRobust(Adaptive):  # 6.7
                     raise ValueError('Не проведена инициализация начальных значений.')
 
             model_val = m.get_last_model_value()
-            print('MODEL', model_val)
             discrepancy = outputs_val - model_val
             new_a = None
             if self._method == 'lsm':  # 6.7.1
@@ -273,9 +258,6 @@ class AdaptiveRobust(Adaptive):  # 6.7
                 kernel_func = cores_dict[cores_key](weight, mu, is_diff=True)
                 discrepancy = kernel_func(discrepancy)
                 new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad, self._matrix_k, weight, _lambda)
-
-            # self._identifier.update_x(outputs_val)
-            # self._identifier.update_a(new_a)
             return new_a
 
         elif self._method == 'pole':  # 6.7.6
@@ -289,12 +271,9 @@ class AdaptiveRobust(Adaptive):  # 6.7
                                                 *self._last_ah))
             model_ah = m.func_model(*support.flatten(m.get_x_values()),
                                     *support.flatten(m.get_u_values()), *self._last_ah)
-            print('model_ah', model_ah)
             n = self._identifier.n
             discrepancy = kernel_func(outputs_val - model_ah)
             new_a, self._last_ah = Adaptive.pole(last_a, self._last_ah, grad_ah, discrepancy, n, gamma, weight=1)
-            # self._identifier.update_x(outputs_val)
-            # self._identifier.update_a(new_a)
             return new_a
 
     @classmethod

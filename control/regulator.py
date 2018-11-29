@@ -20,7 +20,6 @@ class Regulator:
         self._base_vars = []
 
         self._predicted_x = copy.deepcopy(self._model.outputs)
-        # self._current_x = []  # x1_0, x2_0
         self._predicted_u = copy.deepcopy(self._model.inputs)
 
         self._regulator_expr = None
@@ -28,6 +27,28 @@ class Regulator:
 
         self._args = []
         self._args_in_func = []
+
+        self._low_limit = None
+        self._high_limit = None
+
+    def apply_restrictions(self, u):
+        if self._low_limit is not None:
+            for i in range(len(u)):
+                if isinstance(self._low_limit, (list, np.ndarray)):
+                    limit = self._low_limit[i]
+                else:
+                    limit = self._low_limit
+                if u[i] <= limit:
+                    u[i] = limit
+
+        if self._high_limit is not None:
+            for i in range(len(u)):
+                if isinstance(self._low_limit, (list, np.ndarray)):
+                    limit = self._high_limit[i]
+                else:
+                    limit = self._high_limit
+                if u[i] >= limit:
+                    u[i] = limit
 
     def update(self, output, desired_output, *args, **kwargs):
         x_val = []
@@ -37,39 +58,47 @@ class Regulator:
             for j in range(len(v)):
                 if v[j].tao != 0:
                     x_val.append(xs[i].values[-v[j].tao])
-        print('Значения x', x_val)
         u_val = []
-        us = self._model.outputs
+        us = self._model.inputs
         for i in range(len(self._predicted_u)):
             v = self._predicted_u[i].variables
             for j in range(len(v)):
                 if v[j].tao != 0:
                     u_val.append(us[i].values[-v[j].tao])
-        print('Значения u', u_val)
-        print('x(t)', output)
-        print('xt', desired_output)
         last_a = np.array(self._model.last_a)
-        print('a', last_a)
 
-        if isinstance(output, (int, float)) and len(self._predicted_x) == 1:
-            if isinstance(desired_output, (int, float)):
-                desired_output = [desired_output]
-            return self._regulator_func(*desired_output, output, *x_val, *u_val, *last_a)
-        elif isinstance(output, (list, np.ndarray)) and len(self._predicted_x) > 1:
-            return self._regulator_func(*desired_output, *output, *x_val, *u_val, *last_a)
-        else:
-            TypeError(f'Аргумент output некорректного типа: {type(output)}.')
+        if isinstance(desired_output, (int, float)):
+            desired_output = [desired_output]
+        if isinstance(output, (int, float)):
+            output = [output]
+        if isinstance(output, (list, np.ndarray)):
+            if len(output) == 1 and len(self._predicted_x) == 1:
+                print('xt', desired_output)
+                print('x0', output)
+                print('x', x_val)
+                print('u', u_val)
+                print('a', last_a)
+                u = self._regulator_func(*desired_output, output, *x_val, *u_val, *last_a)
+                self.apply_restrictions(u)
+                return u
+            elif len(output) > 1 and len(self._predicted_x) > 1:
+                print([*desired_output, output, *x_val, *u_val, *last_a])
+                u = self._regulator_func(*desired_output, *output, *x_val, *u_val, *last_a)
+                self.apply_restrictions(u)
+                return u
+            else:
+                TypeError(f'Аргумент output некорректного типа: {type(output)}.')
 
     def forecast_one_step(self):
         # скопировать группы x и u из модели
-        self.update_expr(self._predicted_x)
-        self.update_expr(self._predicted_u)
-        self._forecasts.append(self._expr)
-        self._forecasts_vars.append((copy.deepcopy(self._predicted_x), copy.deepcopy(self._predicted_u)))
         # сделать прогноз на 1 такт вперед:
         # продвинуть тао у переменных на 1,
         # сменить имя новой переменной и заменить ее в sympy выражении модели
         # обновить численное значение переменной
+        self.update_expr(self._predicted_x)
+        self.update_expr(self._predicted_u)
+        self._forecasts.append(self._expr)
+        self._forecasts_vars.append((copy.deepcopy(self._predicted_x), copy.deepcopy(self._predicted_u)))
 
     def update_expr(self, variables):
         for g in variables:
@@ -104,7 +133,6 @@ class Regulator:
         min_tao: int = min([g.min_tao for g in self._predicted_u])
         step = 0
         while step < min_tao:
-            print('-' * 30)
             self.forecast_one_step()
             self.expr_subs()
             if step == 0:
@@ -112,23 +140,23 @@ class Regulator:
             step += 1
 
         sp_vars_x_current = sp.var([i[0].name for i in (g.variables for g in self._predicted_x) if i[0].tao == 0])
-        print('current:', sp_vars_x_current)
 
         sp_vars_x = sp.var([i.name for i in support.flatten([g.variables for g in self._predicted_x]) if i.tao != 0])
-        print('x:', sp_vars_x)
         sp_vars_u = sp.var([i.name for i in support.flatten([g.variables for g in self._predicted_u])])
         sp_vars_a = sp.var([i.name for i in self._model.coefficients])
 
         self._args = [self._desired_output_sp, *sp_vars_x_current, *sp_vars_x, *sp_vars_u[1:], *sp_vars_a]  # *sp_vars_x_current
-        print('Аргументы:', self._args)
+        # print('Аргументы:', self._args)
 
         expr = sp.solve(self._expr - self._desired_output_sp, sp_vars_u[0])
+        self._regulator_expr = expr[0]
         print('Выражение:', expr[0])
+        print('Аргументы:', self._args)
         self._regulator_func = ufuncify(self._args, expr[0])
 
-    def get_u(self):
-        # рассчитать управляющее воздействие
-        pass
+    def set_limit(self, low, high):
+        self._high_limit = high
+        self._low_limit = low
 
     @property
     def expr(self):
@@ -141,6 +169,30 @@ class Regulator:
     @property
     def model(self):
         return self._model
+
+    @property
+    def forecasts(self):
+        return self._forecasts
+
+    @property
+    def forecasts_vars(self):
+        return self._forecasts_vars
+
+    @property
+    def low_limit(self):
+        return self._low_limit
+
+    @low_limit.setter
+    def low_limit(self, v):
+        self._low_limit = v
+
+    @property
+    def high_limit(self):
+        return self._high_limit
+
+    @high_limit.setter
+    def high_limit(self, v):
+        self._high_limit = v
 
 
 def main():
@@ -173,6 +225,8 @@ def main():
     r.synthesis()
     u = r.update(5, 10)
     print(u)
+    print(r.forecasts_vars)
+    print(r.forecasts)
 
 
 if __name__ == '__main__':

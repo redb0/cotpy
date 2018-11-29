@@ -76,7 +76,7 @@ class Variable:
             elif self.name[:len(variable_names['control'])] == variable_names['control']:
                 self.name = variable_names['predicted_inputs'] + self.name[len(variable_names['control']):]
         self.update_tao(tao)
-        print(self.name, self.tao)
+        # print(self.name, self.tao)
 
     def copy_var(self, var):
         self._name = var.name
@@ -181,19 +181,21 @@ class GroupVariable:
                 raise ValueError(f'Длнина списка должна быть >= {self._min_memory} и <= {self._memory}.')
         else:
             raise ValueError('Не установлен минимальный размер памяти.')
+        print(v.values)
 
     def set_min_memory(self, val) -> None:
-        self._memory = val + self._max_tao
+        self._memory = val + self._max_tao - 1
         self._min_memory = val
 
     @property
     def last_value(self):
         return self._values[-1]
 
-    @property
-    def all_tao_values(self):  # -> ListNumber
+    def all_tao_values(self, n=-1):  # -> ListNumber
         # хранятся в порядке убывания tao
-        return [self._values[-v.tao] for v in self._vars]  # v.tao + 1
+        if n == -1:
+            return [self._values[- v.tao] for v in self._vars]  # v.tao + 1
+        return [self._values[n - self._min_memory - v.tao + 1] for v in self._vars]  # v.tao + 1
 
     @property
     def memory(self) -> int:
@@ -245,7 +247,7 @@ class Model:
         self._sp_var = []
 
     def initialization(self, a: Matrix=None, x: Matrix=None, u: Matrix=None,
-                       type_memory: str='min') -> Optional[NoReturn]:
+                       type_memory: str='max') -> Optional[NoReturn]:
         if self._a:
             if a:
                 self.variable_init(a, t='a', type_memory=type_memory)
@@ -262,7 +264,7 @@ class Model:
             else:
                 self.variable_init(t='u')
 
-    def variable_init(self, values: Matrix=None, t: str='a', type_memory: str='min') -> Optional[NoReturn]:
+    def variable_init(self, values: Matrix=None, t: str='a', type_memory: str='max') -> Optional[NoReturn]:
         if t not in ['a', 'x', 'u']:
             raise ValueError(f't = {t}. t not in ["a", "x", "u"]')
         attr = self.__getattribute__('_' + t)
@@ -272,7 +274,7 @@ class Model:
             raise ValueError(f'Передан некорректный массив. '
                              f'len(values) != len(self._{t}): {len(values)} != {len(attr)}')
 
-        memory = len(self._a)
+        memory = len(self._a)  # FIXME тут надо корректно сделать, например если 3 коэффициента и еще тао = 2, mem = 5 заполнить мемору на этапе создания групп
         for i in range(len(attr)):
             if values:
                 if t == 'a' and support.is_rect_matrix(values, sub_len=len(values[0])):
@@ -281,11 +283,12 @@ class Model:
                     if type_memory == 'min':
                         attr[i].init_values(values[i], min_memory=memory)
                     elif type_memory == 'max':
-                        if len(values[i]) >= (memory + attr[i].max_tao):
+                        if len(values[i]) >= (memory + attr[i].max_tao - 1):
                             attr[i].set_min_memory(memory)
                             attr[i].init_values(values[i])
                         else:
-                            raise ValueError(f'Количество памяти должно быть >= {memory + attr[i].max_tao}')
+                            raise ValueError(f'Количество значений атребута "{t}" '
+                                             f'должно быть >= {memory + attr[i].max_tao - 1}')
             else:
                 if t == 'a':
                     attr[i].init_zeros(memory)
@@ -317,6 +320,7 @@ class Model:
             raise ValueError(f'Не сущестует атрибута с именем "{name_attr}"')
 
     def generate_func_grad(self) -> Optional[NoReturn]:
+        print('->', self._sp_var)
         if not self._sp_var:
             raise ValueError('Не сгенерированы sympy переменные')
         for c in self._a:
@@ -327,11 +331,11 @@ class Model:
         self._sp_var = sp.var([v.name for v in [*support.flatten([g.variables for g in self._x]),
                                                 *support.flatten([g.variables for g in self._u]), *self._a]])
 
-    def get_x_values(self) -> List[ListNumber]:
-        return [g.all_tao_values for g in self._x]
+    def get_x_values(self, n=-1) -> List[ListNumber]:
+        return [g.all_tao_values(n) for g in self._x]
 
-    def get_u_values(self) -> List[ListNumber]:
-        return [g.all_tao_values for g in self._u]
+    def get_u_values(self, n=-1) -> List[ListNumber]:
+        return [g.all_tao_values(n) for g in self._u]
 
     def get_last_model_value(self) -> Number:
         return self._func_model(*support.flatten(self.get_x_values()),
@@ -519,7 +523,7 @@ def main():
 
     a = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 0, 1, 2], [3, 4, 5, 6]]
     x = [[1, 2, 3, 4], [5, 6, 7, 8]]
-    model.initialization(a, x, [], type_memory='min')
+    model.initialization(a, x, [], type_memory='max')
     print(model.a_values)
     print(model.x_values)
     print(model.u_values)
