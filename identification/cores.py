@@ -1,7 +1,19 @@
+"""Модуль функций ядер для квадратичных критериев."""
+
+
 import numpy as np
 
 
 def abs_core(p, m, is_diff=False):
+    """
+    Модульное ядро.
+    :param p      : коэффициент крутости
+    :type p       : number
+    :param m      : -
+    :param is_diff: флаг производной, если True - считается производная ядра.
+    :type is_diff : bool
+    :return: function(e:number) -> number
+    """
     if is_diff:
         def f(e):
             return np.sign(e)
@@ -12,6 +24,16 @@ def abs_core(p, m, is_diff=False):
 
 
 def abs_pow_core(p, m, is_diff=False):
+    """
+    Модульное степянное ядро.
+    :param p      : коэффициент крутости
+    :type p       : number
+    :param m      : степень
+    :type m       : number
+    :param is_diff: флаг производной, если True - считается производная ядра.
+    :type is_diff : bool
+    :return: function(e:number) -> number
+    """
     if is_diff:
         def f(e):
             return np.power(abs(e), m - 1)
@@ -22,6 +44,16 @@ def abs_pow_core(p, m, is_diff=False):
 
 
 def piecewise_core(p, m, is_diff=False):
+    """
+    Кусочное ядро.
+    :param p      : коэффициент крутости
+    :type p       : number
+    :param m      : ширина основы ядра
+    :type m       : number
+    :param is_diff: флаг производной, если True - считается производная ядра.
+    :type is_diff : bool
+    :return: function(e:number) -> number
+    """
     if is_diff:
         def f(e):
             return e if abs(e) <= m else m * np.sign(e)
