@@ -1,8 +1,40 @@
+"""
+Модуль вспомогательных функций.
+:Authors:
+    - Vladimir Voronov
+"""
+
 import warnings
+
+import collections
 
 
 def flatten(l):
-    return [x for sublist in l for x in sublist]
+    """
+    Функция для расплющивания многомерных списков.
+    
+    >>> list(flatten([1, [2, [3, 4]]]))
+    [1, 2, 3, 4]
+    
+    >>> list(flatten([]))
+    []
+    
+    >>> list(flatten([[1, 2], [3, 4]]))
+    [1, 2, 3, 4]
+    
+    >>> list(flatten([[1, 'abc'], [3.5, 'd']]))
+    [1, 'abc', 3.5, 'd']
+    
+    :param l: итерируемый объект различной вложенности
+    :type l : iterable
+    :return : генератор, последовательно выдающий элементы из многомерного списка.
+    :rtype  : generator
+    """
+    for el in l:
+        if isinstance(el, collections.Iterable) and not isinstance(el, (str, bytes)):
+            yield from flatten(el)
+        else:
+            yield el
 
 
 def is_rect_matrix(m, sub_len=0, min_len=0) -> bool:
@@ -17,108 +49,38 @@ def is_rect_matrix(m, sub_len=0, min_len=0) -> bool:
     return True
 
 
-# def normalize_kwargs(kw, alias_mapping=None, required=(), forbidden=(),
-#                      allowed=None):
-#     """Helper function to normalize kwarg inputs
-#
-#     The order they are resolved are:
-#      1. aliasing
-#      2. required
-#      3. forbidden
-#      4. allowed
-#
-#     This order means that only the canonical names need appear in
-#     `allowed`, `forbidden`, `required`
-#
-#     Parameters
-#     ----------
-#     alias_mapping, dict, optional
-#         A mapping between a canonical name to a list of
-#         aliases, in order of precedence from lowest to highest.
-#
-#         If the canonical value is not in the list it is assumed to have
-#         the highest priority.
-#
-#     required : iterable, optional
-#         A tuple of fields that must be in kwargs.
-#
-#     forbidden : iterable, optional
-#         A list of keys which may not be in kwargs
-#
-#     allowed : tuple, optional
-#         A tuple of allowed fields.  If this not None, then raise if
-#         `kw` contains any keys not in the union of `required`
-#         and `allowed`.  To allow only the required fields pass in
-#         ``()`` for `allowed`
-#
-#     Raises
-#     ------
-#     TypeError
-#         To match what python raises if invalid args/kwargs are passed to
-#         a callable.
-#
-#     """
-#     # deal with default value of alias_mapping
-#     if alias_mapping is None:
-#         alias_mapping = dict()
-#     # make a local so we can pop
-#     kw = dict(kw)
-#     # output dictionary
-#     ret = dict()
-#     # hit all alias mappings
-#     for canonical, alias_list in six.iteritems(alias_mapping):
-#
-#         # the alias lists are ordered from lowest to highest priority
-#         # so we know to use the last value in this list
-#         tmp = []
-#         seen = []
-#         for a in alias_list:
-#             try:
-#                 tmp.append(kw.pop(a))
-#                 seen.append(a)
-#             except KeyError:
-#                 pass
-#         # if canonical is not in the alias_list assume highest priority
-#         if canonical not in alias_list:
-#             try:
-#                 tmp.append(kw.pop(canonical))
-#                 seen.append(canonical)
-#             except KeyError:
-#                 pass
-#         # if we found anything in this set of aliases put it in the return
-#         # dict
-#         if tmp:
-#             ret[canonical] = tmp[-1]
-#             if len(tmp) > 1:
-#                 warnings.warn("Saw kwargs {seen!r} which are all aliases for "
-#                               "{canon!r}.  Kept value from {used!r}".format(
-#                                   seen=seen, canon=canonical, used=seen[-1]))
-#
-#     # at this point we know that all keys which are aliased are removed, update
-#     # the return dictionary from the cleaned local copy of the input
-#     ret.update(kw)
-#
-#     fail_keys = [k for k in required if k not in ret]
-#     if fail_keys:
-#         raise TypeError("The required keys {keys!r} "
-#                         "are not in kwargs".format(keys=fail_keys))
-#     fail_keys = [k for k in forbidden if k in ret]
-#     if fail_keys:
-#         raise TypeError("The forbidden keys {keys!r} "
-#                         "are in kwargs".format(keys=fail_keys))
-#     if allowed is not None:
-#         allowed_set = set(required) | set(allowed)
-#         fail_keys = [k for k in ret if k not in allowed_set]
-#         if fail_keys:
-#             raise TypeError("kwargs contains {keys!r} which are not in "
-#                             "the required {req!r} or "
-#                             "allowed {allow!r} keys".format(
-#                                 keys=fail_keys, req=required,
-#                                 allow=allowed))
-#     return ret
-
-
 def normalize_kwargs(kw, alias_map=None):
+    """
+    Вспомогательная функция для нормализации именованных аргументов.
+    
+    >>> normalize_kwargs({'a': 5, 'b': 10, 'c': 15}, alias_map={'abc': ['c', 'b', 'a']})
+    {'abc': 15}
+    
+    Также будет возвращено предупреждение:
+    UserWarning: Все псевдонимы kwargs ['c', 'b', 'a'] относятся к 'abc'. Будет применен только 'c'
+    
+    >>> normalize_kwargs({'a': 5, 'b': 10, 'c': 15}, alias_map={})
+    {'a': 5, 'b': 10, 'c': 15}
+    
+    >>> normalize_kwargs({'a': 5, 'b': 10}, alias_map={'c': ['a'], 'd': ['b']})
+    {'c': 5, 'd': 10}
+    
+    >>> normalize_kwargs({}, alias_map={'c': ['a'], 'd': ['b']})
+    {}
+    
+    >>> normalize_kwargs({}, alias_map={})
+    {}
+    
+    :param kw       : Словарь исходных именованных аргументов.
+    :type kw        : dict
+    :param alias_map: Отображение между каноническим именем и списком 
+                      сокращений в порядке приоритета от большего к меньшему.
+                      Если каноническое значение отсутствует в списке, 
+                      предполагается, что оно имеет наивысший приоритет.
+    :type alias_map : dict, optional
+    :return: Словарь нормализованных именованных аргументов.
+    :rtype : dict
+    """
     # по убыванию приоритета
     res = dict()
     if alias_map is None:
@@ -141,20 +103,4 @@ def normalize_kwargs(kw, alias_map=None):
     res.update(kw)
     return res
 
-
-def bar(**kwargs):
-    print(kwargs)
-    m = {
-        'aaa': ['a'],
-        'bbb': ['b']
-    }
-    kw = normalize_kwargs(kwargs, alias_map=m)
-    print(kw)
-
-
-def main():
-    bar(a=3, bbb=4, c=90)
-
-if __name__ == '__main__':
-    main()
 

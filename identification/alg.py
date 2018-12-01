@@ -1,3 +1,13 @@
+"""
+Модуль классов с алгоритмами идентификации.
+Содержит:
+    - Адаптивные алгоритмы идентификации
+    - Робастные адаптивные алгоритмы
+
+:Authors:
+    - Vladimir Voronov
+"""
+
 from abc import abstractmethod
 import numpy as np
 
@@ -74,6 +84,7 @@ class Robust(Algorithm):  # 6.5
 
 
 class Adaptive(Algorithm):   # 6.6
+    """Класс адаптивных алгоритмов идентификации."""
     def __init__(self, identifier, **kwargs):
         super().__init__()
         self._identifier = identifier
@@ -92,8 +103,8 @@ class Adaptive(Algorithm):   # 6.6
         kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
         m = self._identifier.model
         last_a = np.array(m.last_a)
-        grad = np.array(m.get_grad_value(*support.flatten(m.get_x_values()),
-                                         *support.flatten(m.get_u_values()),
+        grad = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values())),
+                                         *list(support.flatten(m.get_u_values())),
                                          *last_a))  # FIXME: проверить
         if self._method in ['simplest', 'smp']:
             new_a = Adaptive.simplest(last_a, *outputs_val, grad, **kw)  # gamma=g, g_type=g_type,
@@ -124,11 +135,11 @@ class Adaptive(Algorithm):   # 6.6
                 gamma = kw['gamma']
             if self._last_ah is None:
                 self._last_ah = np.array([1 for _ in range(len(last_a))])
-            grad_ah = np.array(m.get_grad_value(*support.flatten(m.get_x_values()),
-                                                *support.flatten(m.get_u_values()),
+            grad_ah = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values())),
+                                                *list(support.flatten(m.get_u_values())),
                                                 *self._last_ah))
-            model_ah = m.func_model(*support.flatten(m.get_x_values()),
-                                    *support.flatten(m.get_u_values()),
+            model_ah = m.func_model(*list(support.flatten(m.get_x_values())),
+                                    *list(support.flatten(m.get_u_values())),
                                     *self._last_ah)
             n = self._identifier.n
             discrepancy = outputs_val - model_ah
@@ -141,14 +152,45 @@ class Adaptive(Algorithm):   # 6.6
         m = self._identifier.model
         ar_grad = np.zeros((n, len(m.grad)))
         for i in range(n):
-            ar_grad[i] = np.array(m.get_grad_value(*support.flatten(m.get_x_values(n=i)),
-                                                   *support.flatten(m.get_u_values(n=i)),
+            ar_grad[i] = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values(n=i))),
+                                                   *list(support.flatten(m.get_u_values(n=i))),
                                                    *np.array(m.get_coefficients_value(i))))
         self._matrix_k = Adaptive.find_initial_k(ar_grad, init_weight)
 
     @staticmethod
     def simplest(last_a, obj_val, grad, gamma=1, g_type='factor'):
-        # простейший адаптивный алгоритм
+        """
+        Простейший адаптивный алгоритм.
+        
+        Математическое описание в формате TeX:
+        
+        a_{n} = a_{n-1} + \frac{(h_{n}^{*}-g^T(u_{n})*a_{n-1})}{(g^T(u_{n})*g(u_{n})}* g(u_{n})
+        
+        где: n          - номер итерации;
+             a_{n}      - новое (искомое) значение коэыыициентов;
+             a_{n-1}    - предыдущее значение коэффициентов;
+             h_{n}^{*}  - значение выхода объекта на итерации n;
+             u_{n}      - управляющее воздействие;
+             g(u_{n})   - вектор базисных функций;
+             g^T(u_{n}) - транспонированный вектор базисных функций.
+             
+        :param last_a : список значений коэффикиентов на прошлой итерации.
+        :type last_a  : list, np.ndarray
+        :param obj_val: Значение выхода объекта.
+        :type obj_val : number
+        :param grad   : Список значений базисных функций.
+        :type grad    : numpy.ndarray
+        :param gamma  : Коэффициент для уменьшения чувствительности к помехам.
+        :type gamma   : number
+        :param g_type : Метод ввода коэффициента gamma.
+                        Варианты:
+                            1) ['factor', 'f'] - как множитель.
+                            2) ['addend', 'a'] - как слогаемое в знаменатели дроби.
+        :type g_type  : str
+        :return: Список новых значений коэффициентов.
+        :rtype : numpy.ndarray
+        """
+        # TODO: сделать для нелинейных моделей.
         fraction = (obj_val - grad @ last_a)
         if gamma > 0:
             if g_type in ['factor', 'f']:
@@ -215,6 +257,7 @@ class Adaptive(Algorithm):   # 6.6
 
 
 class AdaptiveRobust(Adaptive):  # 6.7
+    """Класс адаптивных робастных методов идентификации."""
     def __init__(self, identifier, **kwargs):
         super().__init__(identifier, **kwargs)
 
@@ -227,8 +270,8 @@ class AdaptiveRobust(Adaptive):  # 6.7
             cores_key = list(cores_dict.keys())[0]
         m = self._identifier.model
         last_a = np.array(m.last_a)
-        grad = np.array(m.get_grad_value(*support.flatten(m.get_x_values()),
-                                         *support.flatten(m.get_u_values()),
+        grad = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values())),
+                                         *list(support.flatten(m.get_u_values())),
                                          *last_a))
 
         if self._method in ('lsm', 'lsm_cipra', 'lsm_diff'):
@@ -266,11 +309,11 @@ class AdaptiveRobust(Adaptive):  # 6.7
             if self._last_ah is None:
                 self._last_ah = np.array([1 for _ in range(len(last_a))])
 
-            grad_ah = np.array(m.get_grad_value(*support.flatten(m.get_x_values()),
-                                                *support.flatten(m.get_u_values()),
+            grad_ah = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values())),
+                                                *list(support.flatten(m.get_u_values())),
                                                 *self._last_ah))
-            model_ah = m.func_model(*support.flatten(m.get_x_values()),
-                                    *support.flatten(m.get_u_values()), *self._last_ah)
+            model_ah = m.func_model(*list(support.flatten(m.get_x_values())),
+                                    *list(support.flatten(m.get_u_values())), *self._last_ah)
             n = self._identifier.n
             discrepancy = kernel_func(outputs_val - model_ah)
             new_a, self._last_ah = Adaptive.pole(last_a, self._last_ah, grad_ah, discrepancy, n, gamma, weight=1)

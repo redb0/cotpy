@@ -1,4 +1,8 @@
-"""Модуль функций сглаживания."""
+"""
+Модуль функций сглаживания.
+:Authors:
+    - Vladimir Voronov
+"""
 
 
 from typing import Union, Tuple
