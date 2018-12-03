@@ -56,6 +56,7 @@ class Algorithm:
 
 
 class LSM(Algorithm):  # п 6.3, 6.4
+    """Класс алгоритмов МНК."""
     def __init__(self):
         super().__init__()
 
@@ -76,6 +77,7 @@ class LSM(Algorithm):  # п 6.3, 6.4
 
 
 class Robust(Algorithm):  # 6.5
+    """Класс робастных алгоритмов идентификации"""
     def __init__(self):
         super().__init__()
 
@@ -98,8 +100,7 @@ class Adaptive(Algorithm):   # 6.6
 
         self._last_ah = None if 'init_ah' not in kw else kw['init_ah']
 
-    def update(self, outputs_val, inputs_val, **kwargs):  # outputs_val(obj_val), inputs_val
-        # TODO: возможно убрать inputs_val
+    def update(self, outputs_val, **kwargs):
         kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
         m = self._identifier.model
         last_a = np.array(m.last_a)
@@ -148,7 +149,16 @@ class Adaptive(Algorithm):   # 6.6
         else:
             raise ValueError('Метода "' + self._method + '" не существует.')
 
-    def init_k_matrix(self, n, init_weight):
+    def init_k_matrix(self, n: int, init_weight) -> None:
+        """
+        Обертка для Adaptive.find_initial_k.
+        
+        :param n          : число начальных измерений
+        :type n           : int
+        :param init_weight: веса.
+        :type init_weight : number, list, np.ndarray
+        :return: None
+        """
         m = self._identifier.model
         ar_grad = np.zeros((n, len(m.grad)))
         for i in range(n):
@@ -163,8 +173,7 @@ class Adaptive(Algorithm):   # 6.6
         Простейший адаптивный алгоритм.
         
         Математическое описание в формате TeX:
-        
-        a_{n} = a_{n-1} + \frac{(h_{n}^{*}-g^T(u_{n})*a_{n-1})}{(g^T(u_{n})*g(u_{n})}* g(u_{n})
+        a_{n} = a_{n-1} + \frac{(h_{n}^{*}-g^T(u_{n})a_{n-1})}{(g^T(u_{n})g(u_{n})}g(u_{n})
         
         где: n          - номер итерации;
              a_{n}      - новое (искомое) значение коэыыициентов;
@@ -207,6 +216,39 @@ class Adaptive(Algorithm):   # 6.6
 
     @classmethod
     def lsm(cls, last_a, discrepancy, grad, k_matrix, weight, _lambda=1):  # obj_val, model_val
+        """
+        Адаптивный метод наименьших квадратов.
+        
+        Математическое описание в формате TeX:
+        a_{n} = a_{n-1} + \gamma_{n}[h_{n}^{*} - h(u_{n}, a_{n-1})],
+        h = h(u_{n}, a_{n-1}),
+        \gamma_{n} = \frac{K_{a_{n-1}}\nabla_{a}h}{p_{n}\lambda + \nabla_{a}^{T}hK_{a_{n-1}}\nabla_{a}h}
+        K_{a_{n}} = [E - \gamma_{n}\nabla_{a}^{T}h]K_{a_{n-1}}\lambda^{-1}, n = n_{0}+1, n_{0}+2, ...
+        
+        K_{a_{n_{0}}} = \sum_{i=1}^{n_{0}}{p_{i}^{-1}\nabla_{a}h(u_{i}, a_{i})\nabla_{a}^{T}h(u_{i}, a_{i})}, 
+        i = 1, ..., n_{0}
+        
+        где: \nabla_{a}h - вектор градиента по параметрам a;
+             \lambda     - коэффициент забывания информации 0<\lambda<=1;
+             E           - едининичная матрица;
+             p           - вес, при p = \sigma^{2} алгоритм становиться стандартный адаптивным МНК.
+             n_{0}       - начальное колличество измерений, n_{0} >= кол-во коэффициентов a.
+        
+        :param last_a     : список значений коэффикиентов на прошлой итерации.
+        :type last_a      : list, np.ndarray
+        :param discrepancy: невязка, равная разнице выходя объекта и модели, т.е. [h_{n}^{*} - h(u_{n}, a_{n-1})].
+        :type discrepancy : number
+        :param grad       : список значений градиента по параметрам a.
+        :type grad        : np.ndarray
+        :param k_matrix   : матрица K на предудущей интерции.
+        :type k_matrix    : np.ndarray
+        :param weight     : значение веса.
+        :type weight      : number
+        :param _lambda    : значение коэффициента забывания информации.
+        :type _lambda     : number
+        :return: кортеж из списка с новыми коэфиициетами и матрицей K.
+        :rtype : Tuple(np.ndarray, np.ndarray)
+        """
         gamma = cls.find_gamma(grad, k_matrix, weight, _lambda)
         new_k = cls.find_k_matrix(grad, gamma, k_matrix, _lambda)
         new_a = last_a + gamma * discrepancy  # (obj_val - model_val)  # grad @ last_a
@@ -214,6 +256,7 @@ class Adaptive(Algorithm):   # 6.6
 
     @staticmethod
     def pole(last_a, last_ah, grad_ah, discrepancy, n, gamma, weight=1):  # obj_val, model_ah
+        # FIXME: работает некорректно
         _gamma = gamma * np.power(n, -1/2)
         # print('gamma =', _gamma)
         new_ah = last_ah + _gamma * (1 / weight) * grad_ah * discrepancy  # (obj_val - model_ah)
@@ -223,18 +266,67 @@ class Adaptive(Algorithm):   # 6.6
 
     @staticmethod
     def find_gamma(grad, k_matrix, weight, _lambda=1):
+        """
+        Расчет параметра gamma для алгоритмов квадратичного критерия.
+        
+        Формула в формате TeX:
+        \gamma_{n} = \frac{K_{a_{n-1}}\nabla_{a}h}{p_{n}\lambda + \nabla_{a}^{T}hK_{a_{n-1}}\nabla_{a}h},
+        h = h(u_{n}, a_{n-1})
+        
+        :param grad    : список значений градиента по параметрам a.
+        :type grad     : np.ndarray
+        :param k_matrix: матрица K.
+        :type k_matrix : np.ndarray
+        :param weight  : вес.
+        :type weight   : number
+        :param _lambda : коэффициент забывания информации.
+        :type _lambda  : number
+        :return: список значений gamma.
+        :rtype : np.ndarray
+        """
         return np.dot(k_matrix, grad) / (weight * _lambda + np.dot(grad.T, np.dot(k_matrix, grad)))
 
     @staticmethod
     def find_k_matrix(grad, gamma, last_k_matrix, _lambda=1):
+        """
+        Расчет матрицы K.
+        
+        Формула в формате TeX:
+        K_{a_{n}} = [E - \gamma_{n}\nabla_{a}^{T}h]K_{a_{n-1}}\lambda^{-1}, 
+        n = n_{0}+1, n_{0}+2, ...
+        
+        :param grad         : список значений градиента по параметрам a.
+        :type grad          : np.ndarray
+        :param gamma        : список значений gamma.
+        :type gamma         : np.ndarray
+        :param last_k_matrix: матрица K на предудущей интерции.
+        :type last_k_matrix : np.ndarray
+        :param _lambda      : коэффициент забывания информации.
+        :type _lambda       : number
+        :return: матрица K.
+        :rtype : np.ndarray
+        """
         e = np.eye(len(gamma))
         return ((e - np.dot(gamma[None, :].T, grad[None, :])) @ last_k_matrix) * (1 / _lambda)
 
     @staticmethod
-    def find_initial_k(ar_grad, weight):
-        # 6.6.4
-        # weight должен быть в виде (s^2)
-        # веса как число и как массив
+    def find_initial_k(ar_grad, weight): # 6.6.4
+        """
+        Расчет начальной матрицы K.
+        
+        Формула в формате TeX:
+        K_{a_{n_{0}}} = \sum_{i=1}^{n_{0}}{p_{i}^{-1}\nabla_{a}h(u_{i}, a_{i})\nabla_{a}^{T}h(u_{i}, a_{i})}, 
+        i = 1, ..., n_{0}
+        
+        :param ar_grad: массив значений градиента для каждого измерения i.
+        :type ar_grad : np.ndarray
+        :param weight : вес.
+        :type weight  : number, list, np.ndarray
+        :return: начальное значение матрицы K.
+        :rtype : np.ndarray
+        :raises ValueError: если длина списка weight не совпадает с длиной ar_grad.
+        :raises TypeError : если weight не является одним из типов number, list, np.ndarray.
+        """
         # ar_grad = [grad1, grad2, ...], grad1 = [grad_a1, grad_a2, ...]
         n0 = len(ar_grad)
         if isinstance(weight, (int, float)):
@@ -261,7 +353,7 @@ class AdaptiveRobust(Adaptive):  # 6.7
     def __init__(self, identifier, **kwargs):
         super().__init__(identifier, **kwargs)
 
-    def update(self, outputs_val, inputs_val, **kwargs):
+    def update(self, outputs_val, **kwargs):
         kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
         mu = 1 if 'mu' not in kw else kw['mu']
         if ('cores' in kw) and (kw['cores'] in cores_dict.keys()):

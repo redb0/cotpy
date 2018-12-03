@@ -1,4 +1,16 @@
+"""
+Модуль классов с алгоритмами идентификации.
+Содержит:
+    - Адаптивные алгоритмы идентификации
+    - Робастные адаптивные алгоритмы
+
+:Authors:
+    - Vladimir Voronov
+"""
+
+
 class Identifier:
+    """Класс идентификатора."""
     def __init__(self, model) -> None:
         self._model = model
 
@@ -39,19 +51,16 @@ class Identifier:
     def __repr__(self):
         return f'Identifier({repr(self._model)}, n0={self._n0})'
 
-    def __str__(self):
-        pass
-
     @property
     def model(self):
         return self._model
 
     @property
-    def n(self):
+    def n(self) -> int:
         return self._n
 
     @property
-    def n0(self):
+    def n0(self) -> int:
         return self._n0
 
     @property
@@ -77,41 +86,3 @@ class Identifier:
     @delta.setter
     def delta(self, val):
         self._delta = val
-
-
-def main():
-    # TODO: добавить проверку на максимальное tao.
-    import model
-
-    model = model.create_model('a_0*x(t-1)+a_2*u(t-1)+a_1*x(t-2)')
-    # model = model.create_model('a_0*x1(t-1)+a_3*x2(t-3)+a_2*x2(t-1)+a_1*x1(t-2)')
-    # model = model.create_model('a_2*u(t-1)+a1+a3')
-    print(model.model_expr_str)
-    print(model.model_expr)
-    print(model.inputs)
-    print(model.outputs)
-    print(model.coefficients)
-    print('-' * 20)
-    iden = Identifier(model)
-    a = [[1, 2, 3], [5, 6, 7], [9, 0, 1]]
-    x = [[1, 2, 3]]
-    u = [[5, 6, 7]]
-    iden.init_data(a, x, u, type_memory='min')
-    # iden.init_data()
-    print(iden.model.a_values)
-    print(iden.model.x_values)
-    print(iden.model.u_values)
-    print('-' * 20)
-    iden.update_data(a=[10, 20, 30], x=[50], u=[40])
-    print('a', iden.model.a_values)
-    print('x', iden.model.x_values)
-    print('u', iden.model.u_values)
-    print('-' * 20)
-    print(iden.model.last_a)
-    print(iden.model.last_x)
-    print(iden.model.last_u)
-    print('-' * 20)
-
-
-if __name__ == '__main__':
-    main()

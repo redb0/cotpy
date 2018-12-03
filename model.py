@@ -76,7 +76,6 @@ class Variable:
             elif self.name[:len(variable_names['control'])] == variable_names['control']:
                 self.name = variable_names['predicted_inputs'] + self.name[len(variable_names['control']):]
         self.update_tao(tao)
-        # print(self.name, self.tao)
 
     def copy_var(self, var):
         self._name = var.name
@@ -116,7 +115,7 @@ class Variable:
         return self._values
 
     @values.setter
-    def values(self, val) -> None:  # TODO: типы
+    def values(self, val) -> None:
         self._values = val
 
     @property
@@ -181,7 +180,6 @@ class GroupVariable:
                 raise ValueError(f'Длнина списка должна быть >= {self._min_memory} и <= {self._memory}.')
         else:
             raise ValueError('Не установлен минимальный размер памяти.')
-        print(v.values)
 
     def set_min_memory(self, val) -> None:
         self._memory = val + self._max_tao - 1
@@ -320,11 +318,10 @@ class Model:
             raise ValueError(f'Не сущестует атрибута с именем "{name_attr}"')
 
     def generate_func_grad(self) -> Optional[NoReturn]:
-        print('->', self._sp_var)
         if not self._sp_var:
             raise ValueError('Не сгенерированы sympy переменные')
         for c in self._a:
-            print(self._model_expr.diff(c.name))
+            # print(self._model_expr.diff(c.name))
             self._grad.append(ufuncify(self._sp_var, self._model_expr.diff(c.name)))
 
     def generate_sp_var(self) -> None:
@@ -341,11 +338,6 @@ class Model:
         return self._func_model(*list(support.flatten(self.get_x_values())),
                                 *list(support.flatten(self.get_u_values())),
                                 *self.last_a)
-
-    # def get_var_values(self):
-    #     return [*support.flatten([g.all_values for g in self._x]),
-    #             *support.flatten([g.all_values for g in self._u]),
-    #             *[a.last_value for a in self._a]]
 
     def generate_model_func(self) -> None:
         self._func_model = ufuncify(self._sp_var, self._model_expr)
@@ -503,47 +495,3 @@ def create_model(expr: str) -> Model:
     model.generate_model_func()  # сгенерирована функция расчета значения модели
 
     return model
-
-
-# def main():
-#     model = create_model('a_0*x1(t-1)+a_3*x2(t-3)+a_2*x2(t-1)+a_1*x1(t-2)')
-#     print(model.model_expr_str)
-#     print(model.model_expr)
-#     print('SP VAR: ', model._sp_var)
-#     print('-' * 20)
-#     for g in model.outputs:
-#         print('group:', g.group_name)
-#         for i in g.variables:
-#             print(i.name, i.tao)
-#     print('-' * 20)
-#     print(model.inputs)
-#     print(model.outputs)
-#     print(model.coefficients)
-#     print('-' * 20)
-#
-#     a = [[1, 2, 3, 4], [5, 6, 7, 8], [9, 0, 1, 2], [3, 4, 5, 6]]
-#     x = [[1, 2, 3, 4], [5, 6, 7, 8]]
-#     model.initialization(a, x, [], type_memory='max')
-#     print(model.a_values)
-#     print(model.x_values)
-#     print(model.u_values)
-#     print('-' * 20)
-#     model.update_a([10, 20, 30, 40])
-#     print('a', model.a_values)
-#     model.update_x([50, 10])
-#     print('x1', model.x_values)
-#     model.update_x([90, 70])
-#     print('x2', model.x_values)
-#     print('-' * 20)
-#     print(model.last_a)
-#     print(model.last_x)
-#     print(model.last_u)
-#     print('-' * 20)
-#     print(model.get_x_values())
-#     print(model.get_u_values())
-#     print(model.get_grad_value(*list(support.flatten(model.get_x_values())), *list(support.flatten(model.get_u_values())), *model.last_a))
-#     print(model.func_model(*list(support.flatten(model.get_x_values())), *list(support.flatten(model.get_u_values())), *model.last_a))
-#
-#
-# if __name__ == '__main__':
-#     main()
