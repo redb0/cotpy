@@ -2,7 +2,7 @@ from random import randint
 
 import pytest
 
-from analyzer import expr_parser
+from cotpy.analyzer import expr_parser
 
 
 def idfn(val):

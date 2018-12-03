@@ -9,10 +9,11 @@
 """
 
 from abc import abstractmethod
-import numpy as np
 
+import numpy as np
 import support
-from identification.cores import cores_dict
+
+from cotpy.identification.cores import cores_dict
 
 _alias_map = {
     'method': ['m'],

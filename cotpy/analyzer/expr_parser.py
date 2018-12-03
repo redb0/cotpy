@@ -1,7 +1,7 @@
 from typing import Tuple, Union, NoReturn, List
 
 # TODO: пока только односимвольные имена
-from settings import variable_names, default_params
+from cotpy.settings import variable_names, default_params
 
 
 OPERATORS = ('+', '-', '*', '/', '**')

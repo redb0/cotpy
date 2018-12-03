@@ -1,0 +1,13 @@
+__pycache__
+.idea
+
+cotpy/.pytest_cache
+cotpy/.mypy_cache
+cotpy/analyzer/__pycache__
+cotpy/control/__pycache__
+cotpy/identification/__pycache__
+cotpy/tests/__pycache__
+
+nk.py
+
+cotpy/examples

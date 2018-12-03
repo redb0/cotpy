@@ -8,10 +8,10 @@ import copy
 
 import numpy as np
 import sympy as sp
+from settings import variable_names
 from sympy.utilities.autowrap import ufuncify
 
-from settings import variable_names
-import support
+from cotpy import support, model
 
 
 class Regulator:
@@ -294,7 +294,6 @@ class Regulator:
 
 
 def main():
-    import model
     m = model.create_model('a_0+a1*x1(t-1)+a_2*u1(t-3)')
     a = [[1, 2, 3], [5, 6, 7], [9, 0, 1]]
     x = [[1, 2, 3]]
