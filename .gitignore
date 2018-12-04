@@ -1,8 +1,9 @@
 __pycache__
 .idea
 
-cotpy/.pytest_cache
-cotpy/.mypy_cache
+.pytest_cache
+.mypy_cache
+cotpy/__pycache__
 cotpy/analyzer/__pycache__
 cotpy/control/__pycache__
 cotpy/identification/__pycache__

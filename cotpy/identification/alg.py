@@ -11,7 +11,7 @@
 from abc import abstractmethod
 
 import numpy as np
-import support
+from cotpy import support
 
 from cotpy.identification.cores import cores_dict
 

@@ -8,7 +8,7 @@ import copy
 
 import numpy as np
 import sympy as sp
-from settings import variable_names
+from cotpy.settings import variable_names
 from sympy.utilities.autowrap import ufuncify
 
 from cotpy import support, model

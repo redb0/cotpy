@@ -2,15 +2,15 @@ import copy
 import itertools
 import operator
 
-import support
+from cotpy import support
 import sympy as sp
-from settings import variable_names
+from cotpy.settings import variable_names
 from sympy.core.add import Add
 from sympy.utilities.autowrap import ufuncify
 from typing import Union, List, Optional, NoReturn
 
-from cotpy.analyzer import check_brackets
-from cotpy.analyzer import parse_expr
+from cotpy.analyzer.validation import check_brackets
+from cotpy.analyzer.expr_parser import parse_expr
 
 Number = Union[int, float]
 ListNumber = List[Number]
