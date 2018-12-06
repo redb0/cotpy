@@ -344,6 +344,11 @@ class Model:
     def get_grad_value(self, *args) -> ListNumber:
         return [f(*args) for f in self._grad]
 
+    def get_last_grad_value(self):
+        return self.get_grad_value(*list(support.flatten(self.get_x_values())),
+                                   *list(support.flatten(self.get_u_values())),
+                                   *self.last_a)
+
     def update_data(self, a: ListNumber=None, u: ListNumber=None, x: ListNumber=None) -> Optional[NoReturn]:
         if self._a:
             if a is not None:

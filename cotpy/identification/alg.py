@@ -109,7 +109,9 @@ class Adaptive(Algorithm):   # 6.6
                                          *list(support.flatten(m.get_u_values())),
                                          *last_a))  # FIXME: проверить
         if self._method in ['simplest', 'smp']:
-            new_a = Adaptive.simplest(last_a, *outputs_val, grad, **kw)  # gamma=g, g_type=g_type,
+            model_val = m.get_last_model_value()
+            discrepancy = outputs_val - model_val
+            new_a = Adaptive.simplest(last_a, *discrepancy, grad, **kw)  # gamma=g, g_type=g_type,
             return new_a
         elif self._method == 'lsm':  # 6.6.3, 6.6.8
             weight = 1 if 'weight' not in kw else kw['weight']
@@ -169,7 +171,7 @@ class Adaptive(Algorithm):   # 6.6
         self._matrix_k = Adaptive.find_initial_k(ar_grad, init_weight)
 
     @staticmethod
-    def simplest(last_a, obj_val, grad, gamma=1, g_type='factor'):
+    def simplest(last_a, discrepancy, grad, gamma=1, g_type='factor'):
         """
         Простейший адаптивный алгоритм.
         
@@ -186,8 +188,8 @@ class Adaptive(Algorithm):   # 6.6
              
         :param last_a : список значений коэффикиентов на прошлой итерации.
         :type last_a  : list, np.ndarray
-        :param obj_val: Значение выхода объекта.
-        :type obj_val : number
+        :param discrepancy: невязка, равная разнице выходя объекта и модели, т.е. h_{n}^{*} - h(u_{n}, a_{n-1}).
+        :type discrepancy : number
         :param grad   : Список значений базисных функций.
         :type grad    : numpy.ndarray
         :param gamma  : Коэффициент для уменьшения чувствительности к помехам.
@@ -201,18 +203,18 @@ class Adaptive(Algorithm):   # 6.6
         :rtype : numpy.ndarray
         """
         # TODO: сделать для нелинейных моделей.
-        fraction = (obj_val - grad @ last_a)
+        # fraction = (obj_val - grad @ last_a)
         if gamma > 0:
             if g_type in ['factor', 'f']:
-                fraction *= gamma
-                fraction /= (grad @ grad)  # скаляр
+                discrepancy *= gamma
+                discrepancy /= (grad @ grad)  # скаляр
             elif g_type in ['addend', 'a']:
-                fraction /= (gamma + (grad @ grad))
+                discrepancy /= (gamma + (grad @ grad))
             else:
                 raise ValueError('Не найдено типа g_type (' + g_type + ').')
         else:
             raise ValueError('Gamma должна быть > 0. ' + str(gamma) + ' <= 0')
-        new_a = last_a + fraction * grad  # вектор
+        new_a = last_a + discrepancy * grad  # вектор
         return new_a
 
     @classmethod

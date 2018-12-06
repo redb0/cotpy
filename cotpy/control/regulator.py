@@ -18,7 +18,7 @@ class Regulator:
     """
     Класс синтеза закона адаптивного управления.
     """
-    def __init__(self, model):
+    def __init__(self, m):
         """
         Атрибуты:
         _expr              : sympy выражение модели объекта
@@ -34,10 +34,10 @@ class Regulator:
         _low_limit         : ограничение снизу на управление
         _high_limit        : ограничение сверху на управление
         
-        :param model: экземпляр класса Model, содержащий модель объекта
-        :type model : class Model from model.py
+        :param m: экземпляр класса Model, содержащий модель объекта
+        :type m : class Model from model.py
         """
-        self._model = model
+        self._model = m
         self._expr = self._model.model_expr
         self._desired_output_sp = sp.var(variable_names['trajectory'])
         self._forecasts = []
