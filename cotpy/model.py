@@ -229,8 +229,8 @@ class GroupVariable:
 class Model:
     # TODO: документация
     def __init__(self):
-        self._expr_str = ''
-        self._model_expr_str = ''
+        # self._expr_str = ''
+        self._str_expr = ''
         self._x = []  # список экземпляров класса GroupVariable
         self._u = []
         self._a = []  # список экземпляров класса Variable, у a tao = None всегда
@@ -240,7 +240,7 @@ class Model:
         self._func_model = None
 
         # sympy выражения
-        self._model_expr = None
+        self._sp_expr = None
         self._sp_var = []
 
     def initialization(self, a: Matrix=None, x: Matrix=None, u: Matrix=None,
@@ -321,7 +321,7 @@ class Model:
             raise ValueError('Не сгенерированы sympy переменные')
         for c in self._a:
             # print(self._model_expr.diff(c.name))
-            self._grad.append(ufuncify(self._sp_var, self._model_expr.diff(c.name)))
+            self._grad.append(ufuncify(self._sp_var, self._sp_expr.diff(c.name)))
 
     def generate_sp_var(self) -> None:
         self._sp_var = sp.var([v.name for v in [*list(support.flatten([g.variables for g in self._x])),
@@ -339,7 +339,7 @@ class Model:
                                 *self.last_a)
 
     def generate_model_func(self) -> None:
-        self._func_model = ufuncify(self._sp_var, self._model_expr)
+        self._func_model = ufuncify(self._sp_var, self._sp_expr)
 
     def get_grad_value(self, *args) -> ListNumber:
         return [f(*args) for f in self._grad]
@@ -387,26 +387,26 @@ class Model:
         for i in range(len_u):  # группы
             self._u[i].update(val[i])
 
-    @property
-    def expr_str(self) -> str:
-        return self._expr_str
+    # @property
+    # def expr_str(self) -> str:
+    #     return self._expr_str
 
-    @expr_str.setter
-    def expr_str(self, val: str) -> None:
-        self._expr_str = val
-
-    @property
-    def model_expr_str(self) -> str:
-        return self._model_expr_str
-
-    @model_expr_str.setter
-    def model_expr_str(self, val: str) -> None:
-        self._model_expr_str = val
-        self._model_expr = sp.S(val)
+    # @expr_str.setter
+    # def expr_str(self, val: str) -> None:
+    #     self._expr_str = val
 
     @property
-    def model_expr(self) -> Add:
-        return self._model_expr
+    def str_expr(self) -> str:
+        return self._str_expr
+
+    @str_expr.setter
+    def str_expr(self, val: str) -> None:
+        self._str_expr = val
+        self._sp_expr = sp.S(val)
+
+    @property
+    def sp_expr(self) -> Add:
+        return self._sp_expr
 
     @property
     def inputs(self) -> List[GroupVariable]:
@@ -480,7 +480,7 @@ class Model:
         pass
 
     def __str__(self) -> str:
-        return f'Model("{self._model_expr}")'
+        return f'Model("{self._sp_expr}")'
 
 
 def create_model(expr: str) -> Model:
@@ -489,8 +489,8 @@ def create_model(expr: str) -> Model:
         raise ValueError('Некорректно расставлены скобки')
     model_expr, x_names, u_names, a_names = parse_expr(expr)
     model = Model()
-    model.expr_str = expr
-    model.model_expr_str = model_expr  # строковое и sympy выражения сохранены
+    # model.expr_str = expr
+    model.str_expr = model_expr  # строковое и sympy выражения сохранены
     model.create_variables(x_names, t='x')
     model.create_variables(u_names, t='u')
     model.create_variables(a_names, t='a')  # переменные сгенерированы

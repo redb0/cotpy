@@ -38,7 +38,7 @@ class Regulator:
         :type m : class Model from model.py
         """
         self._model = m
-        self._expr = self._model.model_expr
+        self._expr = self._model.sp_expr
         self._desired_output_sp = sp.var(variable_names['trajectory'])
         self._forecasts = []
         self._forecasts_vars = []  # [(x, u); ...]

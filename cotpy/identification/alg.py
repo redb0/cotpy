@@ -359,8 +359,8 @@ class AdaptiveRobust(Adaptive):  # 6.7
     def update(self, outputs_val, **kwargs):
         kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
         mu = 1 if 'mu' not in kw else kw['mu']
-        if ('cores' in kw) and (kw['cores'] in cores_dict.keys()):
-            cores_key = kw['cores']
+        if ('core' in kw) and (kw['core'] in cores_dict.keys()):
+            cores_key = kw['core']
         else:
             cores_key = list(cores_dict.keys())[0]
         m = self._identifier.model
@@ -384,10 +384,9 @@ class AdaptiveRobust(Adaptive):  # 6.7
             discrepancy = outputs_val - model_val
             new_a = None
             if self._method == 'lsm':  # 6.7.1
-                e = outputs_val - model_val
                 kernel_func = cores_dict[cores_key](weight, mu, is_diff=False)
                 new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad,
-                                                     self._matrix_k, kernel_func(e), _lambda)
+                                                     self._matrix_k, kernel_func(discrepancy), _lambda)
             elif self._method == 'lsm_cipra':  # 6.7.7
                 kernel_func = cores_dict[cores_key](weight, mu, is_diff=True)
                 new_a, self._matrix_k = AdaptiveRobust.lsm_cipra(last_a, discrepancy, grad,
