@@ -1,17 +1,10 @@
 import numpy as np
 
+import matplotlib.pyplot as plt
+
 from cotpy.identification import alg
 from cotpy.model import create_model
 from cotpy.identification import identifier
-
-import matplotlib.pyplot as plt
-
-# def obj(last_obj_val):
-#     return 5 + 3 * last_obj_val  # + np.random.uniform(-0.2, 0.2)
-
-
-# def obj1(x, u):
-#     return 10 + 0.1 * x + 5 * u  # + np.random.uniform(-1, 1)
 
 
 def draw(t, o_ar, m_ar, a, real_a):
@@ -32,7 +25,7 @@ def draw(t, o_ar, m_ar, a, real_a):
     plt.show()
 
 
-def smp_linear_model(plotting=False):  # TODO: ГОТОВО
+def smp_linear_model(plotting=False):
     """Пример идентификации для простой модели с 
     импользованием простейшего адаптивного алгоритма."""
     # функция имитирующая объект
@@ -82,24 +75,6 @@ def smp_linear_model(plotting=False):  # TODO: ГОТОВО
         real_a = [5, .5]
         draw(t, o_ar, m_ar, a, real_a)
 
-        # import matplotlib.pyplot as plt
-        # fig, axs = plt.subplots(nrows=2, ncols=1)
-        # axs[0].plot(t, o_ar, label='Object')
-        # axs[0].plot(t, m_ar, label='Model')
-        # prop_cycle = plt.rcParams['axes.prop_cycle']
-        # colors = prop_cycle.by_key()['color']
-        # real_a = [5, .5]
-        # for i in range(len(real_a)):
-        #     axs[1].plot(t, a[:, i], label=f'a_{i}', linestyle='-', color=colors[i])
-        #     axs[1].plot(t, [real_a[i] for _ in range(n)], label=f'real a_{i}', linestyle='--', color=colors[i])
-        # axs[1].set_xlabel('Time')
-        # axs[0].set_xlabel('Time')
-        # axs[0].grid(True)
-        # axs[1].grid(True)
-        # axs[0].legend()
-        # axs[1].legend()
-        # plt.show()
-
 
 def smp_nonlinear_model(plotting=False):
     """Пример идентификации объекта, описываемого 
@@ -137,24 +112,6 @@ def smp_nonlinear_model(plotting=False):
         real_a = [10, 2, 1, 4]
         draw(t, o_ar, m_ar, a, real_a)
 
-        # import matplotlib.pyplot as plt
-        # fig, axs = plt.subplots(nrows=2, ncols=1)
-        # axs[0].plot(t, o_ar, label='Object')
-        # axs[0].plot(t, m_ar, label='Model')
-        # prop_cycle = plt.rcParams['axes.prop_cycle']
-        # colors = prop_cycle.by_key()['color']
-        # real_a = [10, 2, 1, 4]
-        # for i in range(len(real_a)):
-        #     axs[1].plot(t, a[:, i], label=f'a_{i}', linestyle='-', color=colors[i])
-        #     axs[1].plot(t, [real_a[i] for _ in range(n)], label=f'real a_{i}', linestyle='--', color=colors[i])
-        # axs[1].set_xlabel('Time')
-        # axs[0].set_xlabel('Time')
-        # axs[0].grid(True)
-        # axs[1].grid(True)
-        # axs[0].legend()
-        # axs[1].legend()
-        # plt.show()
-
 
 def lsm_linear_model(plotting=False):
     """Пример идентификации модели с чистым 
@@ -188,23 +145,6 @@ def lsm_linear_model(plotting=False):
         real_a = [10, 0.1, 5]
         t = np.array([i for i in range(n)])
         draw(t, o_ar, m_ar, a, real_a)
-
-        # import matplotlib.pyplot as plt
-        # fig, axs = plt.subplots(nrows=2, ncols=1)
-        # axs[0].plot(t, o_ar, label='Object')
-        # axs[0].plot(t, m_ar, label='Model')
-        # prop_cycle = plt.rcParams['axes.prop_cycle']
-        # colors = prop_cycle.by_key()['color']
-        # for i in range(len(real_a)):
-        #     axs[1].plot(t, a[:, i], label=f'a_{i}', linestyle='-', color=colors[i])
-        #     axs[1].plot(t, [real_a[i] for _ in range(n)], label=f'real a_{i}', linestyle='--', color=colors[i])
-        # axs[1].set_xlabel('Time')
-        # axs[0].set_xlabel('Time')
-        # axs[0].grid(True)
-        # axs[1].grid(True)
-        # axs[0].legend()
-        # axs[1].legend()
-        # plt.show()
 
 
 def lsm_nonlinear_model(plotting=False):
@@ -243,13 +183,87 @@ def lsm_nonlinear_model(plotting=False):
         draw(t, o_ar, m_ar, a, real_a)
 
 
+def robust_lsm_linear_model(plotting=False):  # FIXME: проверить.
+    """Пример идентификации модели объекта с 
+    использованием робастного алгоритма на основе МНК.
+    Выброс производится намеренно на 20 такте для 
+    демонстрации работы алгоритма."""
+    def obj(x, u):
+        return 5 + 0.5 * x + 2 * u + np.random.uniform(-0.1, 0.1)
+    m = create_model('a0+a1*x(t-1)+a2*u(t-1)')
+    idn = identifier.Identifier(m)
+    idn.init_data(x=[[0, 4.85, 9.26]],
+                  a=[[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                  u=[[0, 1, 1]])
+    lsm = alg.AdaptiveRobust(idn, m='lsm')
+
+    n = 30
+    a = np.zeros((n, 3))
+    o_ar = np.zeros((n,))
+    m_ar = np.zeros((n,))
+    u_ar = [i + 1 for i in range(n)]
+    for i in range(n):
+        if i == 0:
+            obj_val = obj(*idn.model.last_x, *idn.model.last_u)
+        else:
+            obj_val = obj(o_ar[i-1], *idn.model.last_u)
+        if i == 20:
+            # имитация выброса, на состоянии объекта он не сказывается.
+            # например ошибка чтения с датчика.
+            o_ar[i] = obj_val
+            obj_val = 10 * obj_val
+            print(obj_val)
+        else:
+            o_ar[i] = obj_val
+
+        new_a = lsm.update([obj_val], w=0.01, init_weight=0.01, core='abs_pow', mu=0.5)
+        idn.update_x([obj_val])
+        idn.update_u([u_ar[i]])
+        idn.update_a(new_a)
+
+        a[i] = new_a
+        m_ar[i] = idn.model.get_last_model_value()
+
+    print(a)
+
+    if plotting:
+        real_a = [5, 0.5, 2]
+        t = np.array([i for i in range(n)])
+        draw(t, o_ar, m_ar, a, real_a)
+
+
+# def robust_pole_example():
+#     m = create_model('a0+a1*x(t-1)+a2*u(t-1)')
+#     iden = identifier.Identifier(m)
+#     iden.init_data(x=[[10, 12, 11.2]], a=[[1, 1, 1], [1, 1, 1], [1, 1, 1]], u=[[1, 0, 0]])
+#     print('-' * 20)
+#     pole = alg.AdaptiveRobust(iden, m='pole')
+#     u = [i + 10 for i in range(50)]
+#     for i in range(50):
+#         print('iter =', i + 1)
+#         obj_val = [obj1(*iden.model.last_x, *iden.model.last_u)]
+#         if i == 5:
+#             obj_val[0] += 100
+#         new_a = pole.update(obj_val, iden.model.last_u, w=0.1, init_weight=0.1, gamma=1, cores='piecewise', mu=0.15)
+#         print('u =', iden.model.last_u)
+#         iden.update_x(obj_val)
+#         iden.update_u([u[i]])
+#         iden.update_a(new_a)
+#         print('new_a', new_a)
+#         print('-' * 20)
+#
+#     print(iden.model.a_values)
+#     print(iden.model.x_values)
+#     print(iden.model.u_values)
+
+
 def main():
     # smp_linear_model(plotting=True)
     # smp_nonlinear_model(plotting=True)
     # lsm_linear_model(plotting=True)
-    lsm_nonlinear_model(plotting=True)
+    # lsm_nonlinear_model(plotting=True)
 
-    # robust_lsm_linear_model(plotting=True)
+    robust_lsm_linear_model(plotting=True)
 
 
 if __name__ == '__main__':
