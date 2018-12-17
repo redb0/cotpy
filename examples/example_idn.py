@@ -211,7 +211,7 @@ def robust_lsm_linear_model(plotting=False):  # FIXME: проверить.
             # имитация выброса, на состоянии объекта он не сказывается.
             # например ошибка чтения с датчика.
             o_ar[i] = obj_val
-            obj_val = 10 * obj_val
+            obj_val = 10 * obj_val  # TODO: такое поведение из-за того, что выброс сохраняется в памяти
             print(obj_val)
         else:
             o_ar[i] = obj_val
