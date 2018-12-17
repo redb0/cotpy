@@ -76,13 +76,13 @@ class Regulator:
                 if u[i] >= limit:
                     u[i] = limit
 
-    def update(self, output, desired_output, *args, **kwargs):
+    def update(self, output, setpoint, *args, **kwargs):
         """
         Метод расчета управляющего воздействия.
         :param output        : значение выхода объекта
         :type output         : number or list
-        :param desired_output: значение уставки (желаемой трактории движения объекта)
-        :type desired_output : number or list
+        :param setpoint: значение уставки (желаемой трактории движения объекта)
+        :type setpoint : number or list
         :param args          : -
         :param kwargs        : -
         :return: значение управляющего воздействия
@@ -105,17 +105,19 @@ class Regulator:
                     u_val.append(us[i].values[-v[j].tao])
         last_a = np.array(self._model.last_a)
 
-        if isinstance(desired_output, (int, float)):
-            desired_output = [desired_output]
+        if isinstance(setpoint, (int, float)):
+            setpoint = [setpoint]
         if isinstance(output, (int, float)):
             output = [output]
         if isinstance(output, (list, np.ndarray)):
             if len(output) == 1 and len(self._predicted_x) == 1:
-                u = self._regulator_func(*desired_output, output, *x_val, *u_val, *last_a)
+                u = self._regulator_func(*setpoint, *output, *x_val, *u_val, *last_a)
+                u = np.array([u])
                 self.apply_restrictions(u)
                 return u
             elif len(output) > 1 and len(self._predicted_x) > 1:
-                u = self._regulator_func(*desired_output, *output, *x_val, *u_val, *last_a)
+                u = self._regulator_func(*setpoint, *output, *x_val, *u_val, *last_a)
+                u = np.array([u])
                 self.apply_restrictions(u)
                 return u
             else:

@@ -15,7 +15,7 @@ setup(
     name='cotpy',
     version='0.5',
     packages=['cotpy', 'cotpy.tests', 'cotpy.control', 'cotpy.analyzer', 'cotpy.identification'],
-    install_requires=['numpy', 'sympy'],  # matplotlib external packages as dependencies
+    install_requires=['numpy', 'sympy'],  # matplotlib, external packages as dependencies
     url='https://github.com/redb0/cotpy',
     license='BSD 3-Clause',
     author='Vladimir Voronov',

@@ -4,6 +4,7 @@ import operator
 
 from cotpy import support
 import sympy as sp
+import numpy as np
 from cotpy.settings import variable_names
 from sympy.core.add import Add
 from sympy.utilities.autowrap import ufuncify
@@ -43,7 +44,11 @@ class Variable:
 
     def init_zeros(self, n: int) -> None:
         self._memory = n
-        self._values = [0. for _ in range(n)]
+        self._values = np.zeros((n, ))  # [0. for _ in range(n)]
+
+    def init_ones(self, n: int) -> None:
+        self._memory = n
+        self._values = np.ones((n, ))  # [1 for _ in range(n)]
 
     def update(self, new_val: Number) -> None:
         self._values[:-1] = self._values[1:]
@@ -136,7 +141,7 @@ class GroupVariable:
     def __init__(self, list_var: ListVars, min_memory: int=0) -> None:
         self._vars: ListVars = sorted(list_var, key=operator.attrgetter('_tao'))
         self._max_tao: int = self._vars[-1].tao
-        self._min_memory: int = min_memory
+        self._min_memory: int = min_memory  # FIXME: убрать этот атрибут
         self._memory: int = min_memory + self._max_tao
         self._values = None
         self._group_name: str = self._vars[0].name.split('_')[0]
@@ -157,7 +162,13 @@ class GroupVariable:
     def init_zeros(self, min_memory: int=0) -> None:
         if min_memory > 0:
             self.set_min_memory(min_memory)
-        val = [0. for _ in range(self._memory)]
+        val = np.zeros((self._memory, ))  # [0. for _ in range(self._memory)]
+        self.init_values(val)
+
+    def init_ones(self, min_memory: int=0) -> None:
+        if min_memory > 0:
+            self.set_min_memory(min_memory)
+        val = np.ones((self._memory,))  # [0. for _ in range(self._memory)]
         self.init_values(val)
 
     def init_values(self, val, min_memory=0):
@@ -181,8 +192,10 @@ class GroupVariable:
             raise ValueError('Не установлен минимальный размер памяти.')
 
     def set_min_memory(self, val) -> None:
+        if val == 0:
+            val = 1
         self._memory = val + self._max_tao - 1
-        self._min_memory = val
+        self._min_memory = self._memory  # val
 
     @property
     def last_value(self):
@@ -274,23 +287,25 @@ class Model:
         memory = len(self._a)  # FIXME тут надо корректно сделать, например если 3 коэффициента и еще тао = 2, mem = 5 заполнить мемору на этапе создания групп
         for i in range(len(attr)):
             if values:
-                if t == 'a' and support.is_rect_matrix(values, sub_len=len(values[0])):
+                if not support.is_rect_matrix(values, min_len=memory):
+                    raise ValueError(f'Длина подмассивов атребута "{t}" должна быть >= {memory}')
+                if t == 'a':  # and support.is_rect_matrix(values, sub_len=memory) sub_len=len(values[0])
                     attr[i].initialization(values[i])
-                elif t in ['x', 'u'] and support.is_rect_matrix(values, min_len=memory):
+                elif t in ['x', 'u']:  # and support.is_rect_matrix(values, min_len=memory)
                     if type_memory == 'min':
                         attr[i].init_values(values[i], min_memory=memory)
                     elif type_memory == 'max':
-                        if len(values[i]) >= (memory + attr[i].max_tao - 1):
-                            attr[i].set_min_memory(memory)
-                            attr[i].init_values(values[i])
-                        else:
-                            raise ValueError(f'Количество значений атребута "{t}" '
+                        if len(values[i]) < (memory + attr[i].max_tao - 1):
+                            raise ValueError(f'Количество элементов атребута "{t}" '
                                              f'должно быть >= {memory + attr[i].max_tao - 1}')
+                        print(memory)
+                        attr[i].set_min_memory(memory)
+                        attr[i].init_values(values[i])
             else:
                 if t == 'a':
-                    attr[i].init_zeros(memory)
+                    attr[i].init_ones(memory)
                 elif t in ['x', 'u']:
-                    attr[i].init_zeros(min_memory=memory)
+                    attr[i].init_ones(min_memory=memory)
 
     def create_variables(self, data: Union[list, dict], t: str) -> Optional[NoReturn]:
         variables = []
