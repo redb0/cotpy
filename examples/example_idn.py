@@ -87,7 +87,7 @@ def smp_nonlinear_model(plotting=False):
     m = create_model('a0+a1*sin(a2*x1(t-1))+a3*u1(t-1)')
     idn = identifier.Identifier(m)
     idn.init_data(x=[[0, 9.94, 13.41, 15.44]],
-                  a=[[1, 1, 1], [1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                  a=[[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]],
                   u=[[0, 1, 1, 1]])
     smp = alg.Adaptive(idn, method='smp')
     n = 20  # количество тактов
@@ -258,12 +258,12 @@ def robust_lsm_linear_model(plotting=False):  # FIXME: проверить.
 
 
 def main():
-    # smp_linear_model(plotting=True)
+    smp_linear_model(plotting=True)
     # smp_nonlinear_model(plotting=True)
     # lsm_linear_model(plotting=True)
     # lsm_nonlinear_model(plotting=True)
 
-    robust_lsm_linear_model(plotting=True)
+    # robust_lsm_linear_model(plotting=True)
 
 
 if __name__ == '__main__':
