@@ -13,7 +13,7 @@ DOCLINES = (__doc__ or '').split("\n")
 
 setup(
     name='cotpy',
-    version='0.5',
+    version='0.6.0',
     packages=['cotpy', 'cotpy.tests', 'cotpy.control', 'cotpy.analyzer', 'cotpy.identification'],
     install_requires=['numpy', 'sympy'],  # matplotlib, external packages as dependencies
     url='https://github.com/redb0/cotpy',
@@ -21,5 +21,5 @@ setup(
     author='Vladimir Voronov',
     author_email='voronov.volodya2013@yandex.ru',
     description=DOCLINES[0],
-    long_description="\n".join(DOCLINES[2:])
+    long_description="\n".join(DOCLINES[1:])
 )

@@ -10,3 +10,8 @@ cotpy/identification/__pycache__
 cotpy/tests/__pycache__
 
 nk.py
+
+dist/
+MANIFEST
+LICENSE.txt
+README.txt
