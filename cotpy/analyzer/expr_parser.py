@@ -10,6 +10,8 @@ BRAKETS = '()'
 
 def parse_expr(expr: str) -> Tuple[str, dict, dict, List[Tuple[str, int]]]:
     expr = expr.replace(' ', '')
+    if not expr:
+        raise ValueError('Передано некорректное выражение')
     i = 0
     res = ''
     # TODO: возможно переделать x_names и u_names в списки tuples
@@ -32,10 +34,10 @@ def parse_expr(expr: str) -> Tuple[str, dict, dict, List[Tuple[str, int]]]:
             name, idx, _, i = parse_var(expr, i)
             if name not in [item[0] for item in a_names]:
                 a_names.append((name, idx))
-        elif s == variable_names['error']:
-            pass
-        elif s == variable_names['unknown_impact']:
-            pass
+        # elif s == variable_names['error']:
+        #     pass
+        # elif s == variable_names['unknown_impact']:
+        #     pass
         else:
             res += s
             i += 1
@@ -100,20 +102,23 @@ def parse_var(expr: str, i: int) -> Union[NoReturn, Tuple[str, int, int, int]]:
 def parse_lag(expr: str, i: int, var_time: str) -> Union[NoReturn, Tuple[int, int]]:
     tao = 0
     start = i
-    while i <= len(expr) and expr[i] != ')':
+    last_c = ''
+    while i <= len(expr):  # and expr[i] != ')'
         if i - start == 0:
-            if expr[i] == var_time:
+            if expr[i] == var_time and not last_c:
+                last_c = expr[i]
                 i += 1
             else:
                 message = get_error_message(expect=var_time, reality=expr[i], position=i)
                 raise ValueError(message)
-        elif i - start == 1:
+        elif last_c == var_time:  # i - start == 1 and
             if expr[i] == '-':
+                last_c = expr[i]
                 i += 1
             else:
                 message = get_error_message(expect='"-"', reality=expr[i], position=i)
                 raise ValueError(message)
-        elif i - start == 2:
+        elif last_c == '-':  # i - start == 2
             if expr[i].isdigit():
                 tao, i = int_parse(expr, i)
                 break

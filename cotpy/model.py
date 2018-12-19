@@ -50,9 +50,14 @@ class Variable:
         self._memory = n
         self._values = np.ones((n, ))  # [1 for _ in range(n)]
 
-    def update(self, new_val: Number) -> None:
-        self._values[:-1] = self._values[1:]
-        self._values[-1] = new_val
+    def update(self, new_val: Number) -> Optional[NoReturn]:
+        if self._values is None or not self._values:
+            raise ValueError('Атрибут _values не задан')
+        if isinstance(new_val, (int, float)):
+            self._values[:-1] = self._values[1:]
+            self._values[-1] = new_val
+        else:
+            raise ValueError('Некорректный тип данных, ожидается: int, float')
 
     def get_value(self):
         return self._values[-self._tao]
@@ -284,7 +289,7 @@ class Model:
                     attr[i].init_ones(min_memory=memory)
             else:
                 if not support.is_rect_matrix(values, min_len=memory):
-                    raise ValueError(f'Длина подмассивов атребута "{t}" должна быть >= {memory}')
+                    raise ValueError(f'Длина подмассивов атрибута "{t}" должна быть >= {memory}')
                 if t == 'a':
                     attr[i].initialization(values[i])
                 elif t in ['x', 'u']:
@@ -364,12 +369,12 @@ class Model:
             if x is not None:
                 self.update_x(x)
             else:
-                raise AttributeError(f'Требуется обновление коэффициентов. Передано значение: {x}')
+                raise AttributeError(f'Требуется обновление выходов. Передано значение: {x}')
         if self._u:
             if u is not None:
                 self.update_u(u)
             else:
-                raise AttributeError(f'Требуется обновление коэффициентов. Передано значение: {u}')
+                raise AttributeError(f'Требуется обновление входов. Передано значение: {u}')
 
     def update_a(self, a: ListNumber) -> None:
         len_a = len(self._a)
@@ -482,7 +487,7 @@ class Model:
 
 def create_model(expr: str) -> Model:
     # TODO: документация
-    if check_brackets(expr, brackets='()') != -1:
+    if not check_brackets(expr, brackets='()'):
         raise ValueError('Некорректно расставлены скобки')
     model_expr, x_names, u_names, a_names = parse_expr(expr)
     model = Model()

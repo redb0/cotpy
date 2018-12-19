@@ -42,6 +42,7 @@ class Identifier:
         self._model.update_x(x)
 
     def init_data(self, a=None, x=None, u=None, type_memory='max'):
+        # TODO: Сделать вычисление _n0 по уже имеющимся данным из model
         self._model.initialization(a, x, u, type_memory=type_memory)
         if a:
             self._n0 = len(a[0])
