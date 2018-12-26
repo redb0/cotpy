@@ -53,12 +53,13 @@ def example_1():
 
     # создание идентификатора и инициализация начальных значений
     idn = identifier.Identifier(m)
-    idn.init_data(x=[[0, -10, -7]],
+    idn.init_data(x=[[0, -11.33, -9.37]],
                   a=[[1, 1, 1], [1, 1, 1], [1, 1, 1]],
                   u=[[0, 2, 3, 4, 4]])
 
     # определение алгоритма идентификации
     lsm = alg.Adaptive(idn, m='lsm')
+    # smp = alg.Adaptive(idn, m='smp')
 
     # массивы для сохранения промежуточных значений
     u_ar = np.zeros((25,))
@@ -66,10 +67,11 @@ def example_1():
     m_ar = np.zeros((25,))
     a_ar = np.zeros((25, 3))
     xt_ar = np.zeros((25, ))
+    er = np.zeros((25, ))
 
     # создание регулятора, установка ограничений на управление и синтез закона управления
     r = Regulator(m)
-    r.set_limit(0, 300)
+    r.set_limit(0, 100)
     r.synthesis()
 
     # основной цикл
@@ -80,6 +82,7 @@ def example_1():
 
         # идентификация коэффициентов модели и обновляем значения коэффициентов
         new_a = lsm.update(obj_val, w=0.01, init_weight=0.01)
+        # new_a = smp.update(obj_val, gamma=0.01, gt='a', weight=0.9, h=0.1, deep_tuning=True)
         idn.update_a(new_a)
 
         # расчет управляющего воздействия
@@ -95,9 +98,18 @@ def example_1():
         # обновление состояния модели
         idn.update_x(obj_val)
         idn.update_u(new_u)
+        er[i] = v - xt(i)
 
+    print(m.last_a)
+    print(er)
     t = np.array([i for i in range(25)])
     draw(u_ar, o_ar, a_ar, m_ar, [-10, 0.3, 3], xt_ar, t)
+    fig, axs = plt.subplots(nrows=1, ncols=1)
+    axs.plot(t, er, label='Error')
+    axs.set_xlabel('Time')
+    axs.grid(True)
+    axs.legend()
+    plt.show()
 
 
 def example_2():
@@ -210,11 +222,144 @@ def example_3():
     draw(u_ar, o_ar, None, m_ar, [], xt_ar, t)
 
 
+def example_4():
+    """Пример использование библиотеки CotPy для адаптивного 
+    управления на основе сложной линейной модели с чистым 
+    запаздыванием в 5 тактов.
+    Моделируется процесс нагрева и поддержания температуры жидкости."""
+
+    def obj(x1, x2, u1, u2):
+        return 1.68 + 1.235 * x1 - 0.319 * x2 + 0.04 * u1 + 0.027 * u2  # + np.random.uniform(-0.1, 0.1)
+
+    def xt(j):
+        if j <= 75:
+            return 75
+        elif 75 < j <= 100:
+            return 35
+        elif 100 < j <= 125:
+            return 25
+        elif 125 < j <= 150:
+            return 60
+        elif 150 < j <= 175:
+            return 65
+        elif 175 < j <= 200:
+            return 20
+        elif 200 < j <= 225:
+            return 80
+        else:
+            return 65
+
+    expr = "a0+a1*x(t-1)+a2*x(t-2)+a3*u(t-6)+a4*u(t-7)"
+    m = model.create_model(expr)
+    idn = identifier.Identifier(m)
+
+    idn.init_data(a=[[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]],
+                  x=[[20, 20, 20, 20, 20, 20]],
+                  u=[[0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]])
+    smp = alg.Adaptive(idn, m='smp')
+
+    r = Regulator(m)
+    r.set_limit(0, 100)
+    r.synthesis()
+
+    n = 240
+    u_ar = np.zeros((n,))
+    o_ar = np.zeros((n,))
+    m_ar = np.zeros((n,))
+    a_ar = np.zeros((n, 5))
+    xt_ar = np.zeros((n,))
+
+    for i in range(n):
+        x = [obj(*idn.model.get_x_values()[0], *idn.model.get_u_values()[0])]
+        # Используется глубокая подстройка на основе приращений (deep_tuning=True),
+        # а также адаптивный вес при подстройке свободного коэффициента (aw=True)
+        new_a = smp.update(x, gamma=1, gt='a', weight=0.9, h=0.1, deep_tuning=True, aw=True)
+        idn.update_a(new_a)
+
+        new_u = r.update(x, xt(i + 6))
+
+        u_ar[i] = new_u[0]
+        o_ar[i] = x[0]
+        a_ar[i] = new_a
+        xt_ar[i] = xt(i)
+        m_ar[i] = idn.model.get_last_model_value()
+
+        idn.update_x(x)
+        idn.update_u(new_u)
+
+    print('Last coefficients:', idn.model.last_a)
+
+    t = np.array([i for i in range(n)])
+    draw(u_ar, o_ar, a_ar, m_ar, [1.68, 1.235, -0.319, 0.04, 0.027], xt_ar, t)
+
+
+def example_5():
+    """Пример использование библиотеки CotPy для адаптивного 
+    управления на основе нелинейной модели с чистым 
+    запаздыванием в 1 такт."""
+    def obj(x, u):
+        return 1.3 + 0.52 * x * u  # + np.random.uniform(-0.1, 0.1)
+
+    def xt(j):
+        if j <= 75:
+            return 75
+        elif 75 < j <= 100:
+            return 35
+        elif 100 < j <= 120:
+            return 25
+        else:
+            return 60
+
+    expr = "a0+a1*x(t-1)*u(t-2)"
+    m = model.create_model(expr)
+    idn = identifier.Identifier(m)
+
+    idn.init_data(a=[[1, 1], [1, 1]],
+                  x=[[1.3, 1.3]],
+                  u=[[0, 0, 0]])
+    smp = alg.Adaptive(idn, m='smp')
+
+    r = Regulator(m)
+    r.set_limit(0, 100)
+    r.synthesis()
+
+    n = 240
+    u_ar = np.zeros((n,))
+    o_ar = np.zeros((n,))
+    m_ar = np.zeros((n,))
+    a_ar = np.zeros((n, 2))
+    xt_ar = np.zeros((n,))
+
+    for i in range(n):
+        x_val = [obj(*idn.model.get_x_values()[0], *idn.model.get_u_values()[0])]
+
+        new_a = smp.update(x_val, gamma=1, gt='a', weight=0.9, h=0.1, deep_tuning=True, aw=True)
+        idn.update_a(new_a)
+
+        new_u = r.update(x_val, xt(i + 1))
+
+        u_ar[i] = new_u[0]
+        o_ar[i] = x_val[0]
+        a_ar[i] = new_a
+        xt_ar[i] = xt(i)
+        m_ar[i] = idn.model.get_last_model_value()
+
+        idn.update_x(x_val)
+        idn.update_u(new_u)
+
+    print('Last coefficients:', idn.model.last_a)
+
+    t = np.array([i for i in range(n)])
+    draw(u_ar, o_ar, a_ar, m_ar, [1.3, 0.52], xt_ar, t)
+
+
 def main():
     # Раскомментируйте интересующий пример.
-    example_1()
+    # example_1()
     # example_2()
     # example_3()
+    example_4()  # FIXME: свободный коэффициент прлохо идентифицируется
+    # example_5()
 
 
 if __name__ == '__main__':
