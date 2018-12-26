@@ -24,8 +24,24 @@ _alias_map = {
     'efi_lambda': ['efi', 'l'],
     'init_ah': ['ah'],
     'gamma': ['g'],
-    'gamma_type': ['gt']
+    'g_type': ['gt', 'gamma_type'],
+
+    'in_increments': ['inc'],
+
+    'deep_tuning': ['deept', 'dt'],
+    'deviation': ['h'],
+    'adaptive_weight': ['aw']
 }
+
+
+def nf(x, w):
+    if abs(x) > 10:
+        return 0
+    elif 1 <= abs(x) <= 10:
+        return 0.05
+    else:
+        # return (1 - abs(x) ** 2) ** 2
+        return w
 
 
 # def scalar_product(m1: np.ndarray, m2: np.ndarray, weight: Union[Number, ListNumber, np.ndarray]) -> np.ndarray: ...
@@ -107,11 +123,47 @@ class Adaptive(Algorithm):   # 6.6
         last_a = np.array(m.last_a)
         grad = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values())),
                                          *list(support.flatten(m.get_u_values())),
-                                         *last_a))  # FIXME: проверить
+                                         *last_a))
         if self._method in ['simplest', 'smp']:
-            model_val = m.get_last_model_value()
-            discrepancy = outputs_val - model_val
+            weight = 0.1 if 'weight' not in kw else kw['weight']
+            deep_tuning = False if 'deep_tuning' not in kw else kw['deep_tuning']
+            new_a = last_a.copy()
+            if deep_tuning:
+                i = 0
+                delta = 2
+                is_adaptive_w = False if 'adaptive_weight' not in kw else kw['adaptive_weight']
+                h = 0.1 if 'deviation' not in kw else kw['deviation']
+                while abs(delta) >= 2 * h or i == 0:
+                    grad = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values())),
+                                                     *list(support.flatten(m.get_u_values())),
+                                                     *new_a))
+                    grad_p = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values(-1))),
+                                                       *list(support.flatten(m.get_u_values(-1))),
+                                                       *new_a))
+                    d_grad = grad - grad_p
+                    if all(map(lambda y: y <= np.power(10.0, -10), d_grad)):  # np.finfo(float).eps
+                        break
+                    delta = outputs_val[0] - m.last_x[0] - d_grad[1:] @ new_a[1:]
+                    # delta -= h * np.sign(delta)
+                    new_a = Adaptive.simplest(new_a, delta, d_grad, gamma=1, g_type='factor')  # **kw
+
+                    a0 = outputs_val[0] - m.get_value(new_a) + grad[0] * new_a[0]
+                    if is_adaptive_w:
+                        w = nf(a0 - new_a[0], weight)
+                    else:
+                        w = weight
+                    new_a[0] = new_a[0] + w * (a0 - new_a[0])
+                    i += 1
+
+                # print('число глубоких подстроек =', i)
+
+                last_a = new_a
+            discrepancy = outputs_val - m.get_value(last_a)
+            # discrepancy -= h * np.sign(discrepancy)
             new_a = Adaptive.simplest(last_a, *discrepancy, grad, **kw)  # gamma=g, g_type=g_type,
+            # a0 = outputs_val[0] - m.get_value(new_a) + grad[0]*new_a[0]  # grad @ new_a
+            # new_a[0] = new_a[0] + nf(a0 - new_a[0]) * (a0 - new_a[0])
+
             return new_a
         elif self._method == 'lsm':  # 6.6.3, 6.6.8
             weight = 1 if 'weight' not in kw else kw['weight']
@@ -171,7 +223,7 @@ class Adaptive(Algorithm):   # 6.6
         self._matrix_k = Adaptive.find_initial_k(ar_grad, init_weight)
 
     @staticmethod
-    def simplest(last_a, discrepancy, grad, gamma=1, g_type='factor'):
+    def simplest(last_a, discrepancy, grad, gamma=1, g_type='factor', **kwargs):
         """
         Простейший адаптивный алгоритм.
         

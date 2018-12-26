@@ -51,9 +51,9 @@ class Variable:
         self._values = np.ones((n, ))  # [1 for _ in range(n)]
 
     def update(self, new_val: Number) -> Optional[NoReturn]:
-        if self._values is None or not self._values:
+        if self._values is None or self._values == []:
             raise ValueError('Атрибут _values не задан')
-        if isinstance(new_val, (int, float)):
+        if isinstance(new_val, (int, float, np.number)):
             self._values[:-1] = self._values[1:]
             self._values[-1] = new_val
         else:
@@ -155,10 +155,23 @@ class GroupVariable:
         self._values[:-1] = self._values[1:]
         self._values[-1] = val
 
-    def add_var(self, var):
-        self._vars.append(var)
-        self._vars = sorted(self._vars, key=operator.attrgetter('_tao'))
-        self._max_tao: int = self._vars[-1].tao
+    def add_vars(self, var):
+        if isinstance(var, list):
+            self._vars.extend(var)
+        else:
+            self._vars.append(var)
+        self.sorted_var()
+        # self._vars = sorted(self._vars, key=operator.attrgetter('_tao'))
+        # self._max_tao: int = self._vars[-1].tao
+
+    def add_unique_var(self, src):
+        if isinstance(src, list):
+            for v in src:
+                if v.name not in [var.name for var in self._vars]:
+                    self.add_vars(copy.copy(v))
+        else:
+            if src.name not in [var.name for var in self._vars]:
+                self.add_vars(copy.copy(src))
 
     def sorted_var(self):
         self._vars = sorted(self._vars, key=operator.attrgetter('_tao'))
@@ -195,13 +208,27 @@ class GroupVariable:
     def last_value(self):
         return self._values[-1]
 
-    def all_tao_values(self, n=-1, is_new=True):  # -> ListNumber
-        # хранятся в порядке убывания tao
-        if n == -1:
+    def replace(self, src: Union[Variable, List[Variable]]):
+        if isinstance(src, list):
+            for v in src:
+                if v.name not in [var.name for var in self._vars]:
+                    self._vars.append(copy.copy(v))
+        else:
+            if src.name not in [var.name for var in self._vars]:
+                self._vars.append(copy.copy(src))
+
+    def all_tao_values(self, n: Optional[int]=None, is_new: bool=True):  # -> ListNumber
+        # хранятся в порядке убывания tao, self._memory = mem + tao - 1
+        if n is None:
             return [self._values[- v.tao] for v in self._vars]
-        if is_new:
-            return [self._values[n - self._memory + self._max_tao - v.tao] for v in self._vars]
-        return [self._values[n + self._max_tao - v.tao] for v in self._vars]
+        if n < 0:
+            return [self._values[n - v.tao] for v in self._vars]
+        else:
+            if is_new:
+                if n >= self._memory - self._max_tao + 1:
+                    raise IndexError(f'Индекс за пределами диапозона. n >= {self._memory - self._max_tao + 1}')
+                return [self._values[n - self._memory + self._max_tao - v.tao] for v in self._vars]
+            return [self._values[n + self._max_tao - v.tao] for v in self._vars]
 
     @property
     def memory(self) -> int:
@@ -337,16 +364,24 @@ class Model:
         self._sp_var = sp.var([v.name for v in [*list(support.flatten([g.variables for g in self._x])),
                                                 *list(support.flatten([g.variables for g in self._u])), *self._a]])
 
-    def get_x_values(self, n=-1, is_new=True) -> List[ListNumber]:
+    def get_x_values(self, n: Optional[int]=None, is_new: bool=True) -> List[ListNumber]:
         return [g.all_tao_values(n, is_new=is_new) for g in self._x]
 
-    def get_u_values(self, n=-1, is_new=True) -> List[ListNumber]:
+    def get_u_values(self, n: Optional[int]=None, is_new: bool=True) -> List[ListNumber]:
         return [g.all_tao_values(n, is_new=is_new) for g in self._u]
 
     def get_last_model_value(self) -> Number:
         return self._func_model(*list(support.flatten(self.get_x_values())),
                                 *list(support.flatten(self.get_u_values())),
                                 *self.last_a)
+
+    def get_value(self, a: Optional[ListNumber]) -> Number:
+        if a is None:
+            return self.get_last_model_value()
+        else:
+            return self._func_model(*list(support.flatten(self.get_x_values())),
+                                    *list(support.flatten(self.get_u_values())),
+                                    *a)
 
     def generate_model_func(self) -> None:
         self._func_model = ufuncify(self._sp_var, self._sp_expr)

@@ -11,7 +11,7 @@ import sympy as sp
 from cotpy.settings import variable_names
 from sympy.utilities.autowrap import ufuncify
 
-from cotpy import support, model
+from cotpy import support
 
 
 class Regulator:
@@ -164,7 +164,7 @@ class Regulator:
         for i in range(len(dst)):
             for obj in src[i].variables:
                 if obj.tao not in list([j.tao for j in dst[i].variables]):
-                    dst[i].add_var(copy.copy(obj))
+                    dst[i].add_vars(copy.copy(obj))
 
     def expr_subs(self):
         """
@@ -183,14 +183,30 @@ class Regulator:
         
         :return:  None
         """
-        for i in range(len(self._predicted_x)):
-            for j in range(len(self._predicted_x[i].variables)):
+        for i in range(len(self._predicted_x)):  # по группам
+            j = 0
+            replacement = False
+            while j < len(self._predicted_x[i].variables):  # по переменным
                 obj = self._predicted_x[i].variables[j]
                 if obj.tao == 1 and obj.name[:len(variable_names['predicted_outputs'])] == variable_names['predicted_outputs']:
                     self._expr = self._expr.subs({sp.var(obj.name): self._forecasts[0]})
-                    obj.copy_var(self._base_vars[0][i].variables[j])
-                    self.copy_vars(self._predicted_u, self._base_vars[1])
-            self._predicted_x[i].sorted_var()
+                    self._predicted_x[i].variables.pop(j)
+                    replacement = True
+                j += 1
+            if replacement:
+                self._predicted_x[i].add_unique_var(self._base_vars[0][i].variables)
+                self._predicted_u[i].add_unique_var(self._base_vars[1][i].variables)
+
+            # for j in range(len(self._predicted_x[i].variables)):  # по переменным
+            #     obj = self._predicted_x[i].variables[j]
+            #     if obj.tao == 1 and obj.name[:len(variable_names['predicted_outputs'])] == variable_names['predicted_outputs']:
+            #         self._expr = self._expr.subs({sp.var(obj.name): self._forecasts[0]})
+            #
+            #         obj.copy_var(self._base_vars[0][i].variables[j])  # FIXME: сделать удаление этой переменной и копирование всех вставленных переменных, если их нет!!!!!!
+            #         self.copy_vars(self._predicted_u, self._base_vars[1])
+            #     else:
+            #         new_vars.append(copy.copy(obj))
+            # self._predicted_x[i].sorted_var()
 
     def var_replace(self, old_name, new_name):
         """Метод замены переменных в sympy выражении модели"""
@@ -225,6 +241,7 @@ class Regulator:
         min_tao: int = min([g.min_tao for g in self._predicted_u])
         step = 0
         while step < min_tao:
+            # e = self._expr
             self.forecast_one_step()
             self.expr_subs()
             if step == 0:
@@ -239,8 +256,8 @@ class Regulator:
         self._args = [self._desired_output_sp, *sp_vars_x_current, *sp_vars_x, *sp_vars_u[1:], *sp_vars_a]
         expr = sp.solve(self._expr - self._desired_output_sp, sp_vars_u[0])
         self._regulator_expr = expr[0]
-        # print('Выражение:', expr[0])
-        # print('Аргументы:', self._args)
+        print('Выражение:', expr[0])
+        print('Аргументы:', self._args)
         self._regulator_func = ufuncify(self._args, expr[0])
 
     def set_limit(self, low, high) -> None:
