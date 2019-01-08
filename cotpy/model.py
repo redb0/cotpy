@@ -386,6 +386,9 @@ class Model:
     def generate_model_func(self) -> None:
         self._func_model = ufuncify(self._sp_var, self._sp_expr)
 
+    # def get_grad_value(self, x=(), u=(), a=()) -> ListNumber:
+    #     return [f(*x, *u, *a) for f in self._grad]
+
     def get_grad_value(self, *args) -> ListNumber:
         return [f(*args) for f in self._grad]
 

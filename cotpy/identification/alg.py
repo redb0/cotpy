@@ -26,7 +26,7 @@ _alias_map = {
     'gamma': ['g'],
     'g_type': ['gt', 'gamma_type'],
 
-    'in_increments': ['inc'],
+    'use_increments': ['use_inc', 'uinc'],
 
     'deep_tuning': ['deept', 'dt'],
     'deviation': ['h'],
@@ -38,7 +38,7 @@ def nf(x, w):
     if abs(x) > 10:
         return 0
     elif 1 <= abs(x) <= 10:
-        return 0.05
+        return 0.05  # 0.05
     else:
         # return (1 - abs(x) ** 2) ** 2
         return w
@@ -125,7 +125,7 @@ class Adaptive(Algorithm):   # 6.6
                                          *list(support.flatten(m.get_u_values())),
                                          *last_a))
         if self._method in ['simplest', 'smp']:
-            weight = 0.1 if 'weight' not in kw else kw['weight']
+            weight = 0.9 if 'weight' not in kw else kw['weight']
             deep_tuning = False if 'deep_tuning' not in kw else kw['deep_tuning']
             new_a = last_a.copy()
             if deep_tuning:
@@ -133,6 +133,7 @@ class Adaptive(Algorithm):   # 6.6
                 delta = 2
                 is_adaptive_w = False if 'adaptive_weight' not in kw else kw['adaptive_weight']
                 h = 0.1 if 'deviation' not in kw else kw['deviation']
+
                 while abs(delta) >= 2 * h or i == 0:
                     grad = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values())),
                                                      *list(support.flatten(m.get_u_values())),
@@ -152,7 +153,7 @@ class Adaptive(Algorithm):   # 6.6
                         w = nf(a0 - new_a[0], weight)
                     else:
                         w = weight
-                    new_a[0] = new_a[0] + w * (a0 - new_a[0])
+                    new_a[0] = new_a[0] + w * (a0 - new_a[0])  # w
                     i += 1
 
                 # print('число глубоких подстроек =', i)
@@ -169,6 +170,7 @@ class Adaptive(Algorithm):   # 6.6
             weight = 1 if 'weight' not in kw else kw['weight']
             init_weight = 1 if 'init_weight' not in kw else kw['init_weight']
             _lambda = 1 if 'efi_lambda' not in kw else kw['efi_lambda']
+            use_increments = False if 'use_increments' not in kw else kw['use_increments']
 
             if self._matrix_k is None:
                 if self._identifier.n0 != 0:
@@ -177,9 +179,28 @@ class Adaptive(Algorithm):   # 6.6
                     # TODO: добавить автоматическое заполнение
                     raise ValueError('Не проведена инициализация начальных значений.')
 
-            model_val = m.get_last_model_value()  # FIXME: проверить
-            discrepancy = outputs_val - model_val
-            new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad, self._matrix_k, weight, _lambda)
+            last_a = np.array(last_a)
+            if use_increments:
+                is_adaptive_w = False if 'adaptive_weight' not in kw else kw['adaptive_weight']
+                grad = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values())),
+                                                 *list(support.flatten(m.get_u_values())),
+                                                 *last_a))
+                grad_p = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values(-1))),
+                                                   *list(support.flatten(m.get_u_values(-1))),
+                                                   *last_a))
+                d_grad = grad - grad_p
+                delta = outputs_val[0] - m.last_x[0] - d_grad[1:] @ last_a[1:]
+                new_a, self._matrix_k = Adaptive.lsm(last_a, delta, d_grad, self._matrix_k, weight, _lambda)  # **kw
+
+                a0 = outputs_val[0] - m.get_value(new_a) + grad[0] * new_a[0]
+                if is_adaptive_w:
+                    w = nf(a0 - new_a[0], 0.9)  # FIXME: заменить 0,9 на параметр
+                else:
+                    w = 0.9
+                new_a[0] = new_a[0] + w * (a0 - new_a[0])  # w
+            else:
+                discrepancy = outputs_val - m.get_value(last_a)
+                new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad, self._matrix_k, weight, _lambda)
             return new_a
 
         elif self._method == 'pole':
