@@ -11,7 +11,23 @@ from typing import Union, Tuple
 Number = Union[int, float]
 
 
-def average(a: Number, last_a: Number, n: int) -> Number:
+class Smoothing:
+    def __init__(self):
+        self._sigma = 0
+
+    def avr(self, avr_type, *args, **kwargs):
+        if avr_type in ('std', 'std_avr', 'standard'):
+            return std_avr(*args, **kwargs)
+        elif avr_type in ('efi', 'efi_avr'):
+            new_a, self._sigma = efi_avr(*args, last_sigma=self._sigma, **kwargs)
+            return new_a
+        elif avr_type in ('moving', 'moving_avr'):
+            return moving_avr(*args, **kwargs)
+        else:
+            raise ValueError('Переданное значение аргумента avr_type не поддерживается')
+
+
+def std_avr(a: Number, last_a: Number, n: int, *args, **kwargs) -> Number:
     """
     Простое сглаживание, аналогичное используется в алгоритме Поляка.
     :param a     : текущее значение коэффициента
@@ -26,7 +42,7 @@ def average(a: Number, last_a: Number, n: int) -> Number:
     return last_a + (1 / n) * (a - last_a)
 
 
-def efi(a: Number, last_a: Number, l: Number, last_sigma: Number) -> Tuple[Number, Number]:
+def efi_avr(a: Number, last_a: Number, l: Number, *args, last_sigma: Number=0, **kwargs) -> Tuple[Number, Number]:
     """
     Экспоненциальное забывание информации.
     :param a         : текущее значение коэффициента
@@ -48,25 +64,36 @@ def efi(a: Number, last_a: Number, l: Number, last_sigma: Number) -> Tuple[Numbe
     return new_a, sigma
 
 
-def moving_average(a: Number, last_a: Number, last_k_a: Number, k: int) -> Number:
+def moving_avr(a: Number, last_a: Number, last_k_a: Number, window_size: int, *args, **kwargs) -> Number:
     """
     Сглаживание методом скользящего среднего.
-    :param a       : текущее значение коэффициента
-    :type a        : int or float
-    :param last_a  : предыдущее значение коэффициента
-    :type last_a   : int or float
-    :param last_k_a: значение коэффициента на k-й итерации назад
-    :type last_k_a : int or float
-    :param k       : количество усредняемых значений
-    :type k        : int
+    :param a          : текущее значение коэффициента
+    :type a           : int or float
+    :param last_a     : предыдущее значение коэффициента
+    :type last_a      : int or float
+    :param last_k_a   : значение коэффициента на k-й итерации назад
+    :type last_k_a    : int or float
+    :param window_size: количество усредняемых значений
+    :type window_size : int
     :return: значение коэффициента после сглаживания
     :rtype : int or float
     """
-    return last_a + (1 / k) * (a - last_k_a)
+    return last_a + (1 / window_size) * (a - last_k_a)
 
 
-average_type = {
-    'standard': average,
-    'efi': efi,
-    'moving': moving_average,
+# def avr(avr_type):
+#     if avr_type in ('standard', 'std', 'std_avr'):
+#         return std_avr
+#     elif avr_type in ('efi', 'efi_avr'):
+#         return efi_avr
+#     elif avr_type in ('moving', 'moving_avr'):
+#         return moving_avr
+#     else:
+#         return None
+
+
+_alias_map = {
+    'standard': ('std', 'std_avr'),
+    'efi': ('efi_avr',),
+    'moving': ('moving_avr',),
 }

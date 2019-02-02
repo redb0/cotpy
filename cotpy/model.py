@@ -44,11 +44,11 @@ class Variable:
 
     def init_zeros(self, n: int) -> None:
         self._memory = n
-        self._values = np.zeros((n, ))  # [0. for _ in range(n)]
+        self._values = np.zeros((n, ))
 
     def init_ones(self, n: int) -> None:
         self._memory = n
-        self._values = np.ones((n, ))  # [1 for _ in range(n)]
+        self._values = np.ones((n, ))
 
     def update(self, new_val: Number) -> Optional[NoReturn]:
         if self._values is None or self._values == []:
@@ -147,7 +147,8 @@ class GroupVariable:
         self._vars: ListVars = sorted(list_var, key=operator.attrgetter('_tao'))
         self._max_tao: int = self._vars[-1].tao
         # self._min_memory: int = min_memory
-        self._memory: int = self._max_tao
+        self._min_memory: int = self._max_tao
+        self._add_memory = 0
         self._values = None
         self._group_name: str = self._vars[0].name.split('_')[0]
 
@@ -179,30 +180,52 @@ class GroupVariable:
 
     def init_zeros(self, min_memory: int=0) -> None:
         self.set_memory(min_memory)
-        val = np.zeros((self._memory, ))
+        val = np.zeros((self._min_memory,))
         self.init_values(val)
 
     def init_ones(self, min_memory: int=0) -> None:
         self.set_memory(min_memory)
-        val = np.ones((self._memory,))
+        val = np.ones((self._min_memory,))
         self.init_values(val)
 
     def init_values(self, val):
         len_val = len(val)
-        if self._memory == 0:
+        if self._min_memory == 0:
             raise ValueError('Не установлен минимальный размер памяти.')
             # заполнить значения
-        if len_val >= self._memory:
-            self._values = val.copy()
+        if len_val >= self._min_memory:
+            self._values = np.array([0. for _ in range(self._add_memory - (self._min_memory - self._max_tao + 1))] + val)
             for v in self._vars:
                 v.values = self._values
         else:
-            raise ValueError(f'Длнина списка должна быть >= {self._memory}.')
+            raise ValueError(f'Длнина списка должна быть >= {self._min_memory}.')
+
+    def set_additional_memory(self, n: int) -> None:
+        memory = self._min_memory - self._max_tao + 1
+        if n >= 0:  # memory:
+            if self._values is None:
+                self._add_memory = n
+            else:
+                self._add_memory = n
+                self._values = np.concatenate((np.array([0. for _ in range(n - memory)]),
+                                               self._values[-self._min_memory:]), axis=0)
+                for v in self._vars:
+                    v.values = self._values
+        else:
+            raise ValueError(f'Величина памяти должна быть >= 0')
 
     def set_memory(self, val) -> None:
         if val == 0:
             val = 1
-        self._memory = val + self._max_tao - 1
+        self._min_memory = val + self._max_tao - 1
+
+    @property
+    def memory_size(self) -> int:
+        return self._add_memory
+
+    @property
+    def start_memory_size(self) -> int:
+        return self._min_memory - self._max_tao + 1
 
     @property
     def last_value(self):
@@ -217,22 +240,24 @@ class GroupVariable:
             if src.name not in [var.name for var in self._vars]:
                 self._vars.append(copy.copy(src))
 
-    def all_tao_values(self, n: Optional[int]=None, is_new: bool=True):  # -> ListNumber
+    def all_tao_values(self, n: int=0, is_new: bool=True):  # -> ListNumber
         # хранятся в порядке убывания tao, self._memory = mem + tao - 1
-        if n is None:
-            return [self._values[- v.tao] for v in self._vars]
-        if n < 0:
+        if n <= 0:
             return [self._values[n - v.tao] for v in self._vars]
         else:
+            n -= 1
             if is_new:
-                if n >= self._memory - self._max_tao + 1:
-                    raise IndexError(f'Индекс за пределами диапозона. n >= {self._memory - self._max_tao + 1}')
-                return [self._values[n - self._memory + self._max_tao - v.tao] for v in self._vars]
-            return [self._values[n + self._max_tao - v.tao] for v in self._vars]
+                if n >= self._min_memory - self._max_tao + 1:
+                    raise IndexError(f'Индекс за пределами диапозона. n >= {self._min_memory - self._max_tao + 1}')
+                return [self._values[n - self._min_memory + self._max_tao - v.tao] for v in self._vars]
+            if n > len(self._values) - self._max_tao:
+                raise IndexError(f'Индекс за пределами диапозона. n >= {len(self._values) - self._max_tao}')
+            else:
+                return [self._values[n + self._max_tao - v.tao] for v in self._vars]
 
     @property
     def memory(self) -> int:
-        return self._memory
+        return self._min_memory
 
     @property
     def variables(self):
@@ -259,7 +284,7 @@ class GroupVariable:
 
     def __str__(self) -> str:
         return (f'(_vars={self._vars}, _max_tao={self._max_tao},'
-                f'_memory={self._memory}, _values={self._values}, _group_name={self._group_name})')
+                f'_memory={self._min_memory}, _values={self._values}, _group_name={self._group_name})')
 
 
 class Model:
@@ -271,6 +296,8 @@ class Model:
         self._u = []
         self._a = []  # список экземпляров класса Variable, у a tao = None всегда
 
+        self._outputs = None
+
         # функции
         self._grad = []
         self._func_model = None
@@ -280,24 +307,31 @@ class Model:
         self._sp_var = []
 
     def initialization(self, a: Matrix=None, x: Matrix=None, u: Matrix=None,
-                       type_memory: str='max') -> Optional[NoReturn]:
+                       type_memory: str='max', memory_size: int=0) -> Optional[NoReturn]:
         if self._a:
-            if a:
+            if a is not None:
                 self.variable_init(a, t='a', type_memory=type_memory)
             else:
                 self.variable_init(t='a')
         if self._x:
-            if x:
-                self.variable_init(x, t='x', type_memory=type_memory)
+            if x is not None:
+                self.variable_init(x, t='x', type_memory=type_memory, memory_size=memory_size)
             else:
-                self.variable_init(t='x')
+                self.variable_init(t='x', memory_size=memory_size)
+        else:
+            # создание дополнительного массива при отсутствии массива с иксами
+            if memory_size > 0:
+                if x is not None:
+                    self._outputs = np.array(x[0])
+                else:
+                    self._outputs = np.array([0 for _ in range(memory_size)])
         if self._u:
-            if u:
-                self.variable_init(u, t='u', type_memory=type_memory)
+            if u is not None:
+                self.variable_init(u, t='u', type_memory=type_memory, memory_size=memory_size)
             else:
-                self.variable_init(t='u')
+                self.variable_init(t='u', memory_size=memory_size)
 
-    def variable_init(self, values: Matrix=None, t: str='a', type_memory: str='max') -> Optional[NoReturn]:
+    def variable_init(self, values: Matrix=None, t: str='a', type_memory: str='max', memory_size: int=0) -> Optional[NoReturn]:
         if t not in ['a', 'x', 'u']:
             raise ValueError(f't = {t}. t not in ["a", "x", "u"]')
         attr = self.__getattribute__('_' + t)
@@ -320,14 +354,17 @@ class Model:
                 if t == 'a':
                     attr[i].initialization(values[i])
                 elif t in ['x', 'u']:
+                    if len(values[i]) < (memory + attr[i].max_tao - 1):
+                        raise ValueError(f'Количество элементов атребута "{t}" '
+                                         f'должно быть >= {memory + attr[i].max_tao - 1}')
                     if type_memory == 'min':
-                        attr[i].init_values(values[i])
-                    elif type_memory == 'max':
-                        if len(values[i]) < (memory + attr[i].max_tao - 1):
-                            raise ValueError(f'Количество элементов атребута "{t}" '
-                                             f'должно быть >= {memory + attr[i].max_tao - 1}')
                         attr[i].set_memory(memory)
-                        attr[i].init_values(values[i])
+                    elif type_memory == 'max':
+                        max_memory = len(values[i]) - attr[i].max_tao + 1
+                        attr[i].set_memory(max_memory)
+                    if memory_size > 0:  # memory_size >= memory:
+                        attr[i].set_additional_memory(memory_size)
+                    attr[i].init_values(values[i])
 
     def create_variables(self, data: Union[list, dict], t: str) -> Optional[NoReturn]:
         variables = []
@@ -364,10 +401,10 @@ class Model:
         self._sp_var = sp.var([v.name for v in [*list(support.flatten([g.variables for g in self._x])),
                                                 *list(support.flatten([g.variables for g in self._u])), *self._a]])
 
-    def get_x_values(self, n: Optional[int]=None, is_new: bool=True) -> List[ListNumber]:
+    def get_x_values(self, n: int=0, is_new: bool=True) -> List[ListNumber]:
         return [g.all_tao_values(n, is_new=is_new) for g in self._x]
 
-    def get_u_values(self, n: Optional[int]=None, is_new: bool=True) -> List[ListNumber]:
+    def get_u_values(self, n: int=0, is_new: bool=True) -> List[ListNumber]:
         return [g.all_tao_values(n, is_new=is_new) for g in self._u]
 
     def get_last_model_value(self) -> Number:
@@ -422,11 +459,15 @@ class Model:
             self._a[i].update(a[i])
 
     def update_x(self, val: ListNumber) -> None:
-        len_x = len(self._x)
-        if len_x != len(val):
-            raise ValueError(f'Длина массива {val} должна быть = {len_x}. {len_x} != {len(val)}')
-        for i in range(len_x):  # группы
-            self._x[i].update(val[i])
+        if self._x:
+            len_x = len(self._x)
+            if len_x != len(val):
+                raise ValueError(f'Длина массива {val} должна быть = {len_x}. {len_x} != {len(val)}')
+            for i in range(len_x):  # группы
+                self._x[i].update(val[i])
+        else:
+            self._outputs[:-1] = self._outputs[1:]
+            self._outputs[-1] = val[0]
 
     def update_u(self, val: ListNumber) -> None:
         len_u = len(self._u)
@@ -434,6 +475,33 @@ class Model:
             raise ValueError(f'Длина массива {val} должна быть = {len_u}. {len_u} != {len(val)}')
         for i in range(len_u):  # группы
             self._u[i].update(val[i])
+
+    def set_add_memory(self, n: int) -> None:
+        # TODO: возможно сделать изменение памяти без удаления существующих значений
+        if n > 0:
+            if self._x:
+                for group in self._x:
+                    group.set_additional_memory(n)
+            else:
+                self._outputs = np.array([0 for _ in range(n)])
+            if self._u:
+                for group in self._u:
+                    group.set_additional_memory(n)
+        else:
+            raise ValueError(f'Величина памяти должна быть >= 0')
+
+    @property
+    def memory_size(self) -> int:
+        if self._x:
+            return self._x[0].memory_size
+        elif self._outputs is not None:
+            return len(self._outputs)
+        else:
+            return 0
+
+    @property
+    def start_memory_size(self) -> int:
+        return self._x[0].start_memory_size
 
     @property
     def str_expr(self) -> str:
@@ -455,6 +523,13 @@ class Model:
     @property
     def outputs(self) -> List[GroupVariable]:
         return self._x
+
+    def outputs_values(self, p: int):
+        if self._x:
+            return [list(support.flatten(self.get_x_values(-i)))[0] for i in range(p)]
+        else:
+            # print('получение выходов:', self._outputs[-p:])
+            return self._outputs[-p:]
 
     @property
     def coefficients(self) -> ListVars:

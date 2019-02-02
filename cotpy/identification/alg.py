@@ -27,6 +27,7 @@ _alias_map = {
     'g_type': ['gt', 'gamma_type'],
 
     'use_increments': ['use_inc', 'uinc'],
+    'use_memory': ['um'],
 
     'deep_tuning': ['deept', 'dt'],
     'deviation': ['h'],
@@ -38,9 +39,9 @@ def nf(x, w):
     if abs(x) > 10:
         return 0
     elif 1 <= abs(x) <= 10:
-        return 0.05  # 0.05
+        # return (1 - (abs(x) / 10.0) ** 3) ** 50 + 0.05
+        return 0.05
     else:
-        # return (1 - abs(x) ** 2) ** 2
         return w
 
 
@@ -127,43 +128,55 @@ class Adaptive(Algorithm):   # 6.6
         if self._method in ['simplest', 'smp']:
             weight = 0.9 if 'weight' not in kw else kw['weight']
             deep_tuning = False if 'deep_tuning' not in kw else kw['deep_tuning']
-            new_a = last_a.copy()
-            if deep_tuning:
-                i = 0
-                delta = 2
-                is_adaptive_w = False if 'adaptive_weight' not in kw else kw['adaptive_weight']
+            use_memory = False if 'use_memory' not in kw else kw['use_memory']
+            if use_memory:  # and (self._identifier.n + self._identifier.model.start_memory_size) >= self._identifier.model.memory_size
+                memory = self._identifier.model.memory_size
+                if memory <= 0:
+                    raise ValueError('Величина памяти должна быть > 0')
+                memory = self._identifier.model.memory_size
+                dh = np.array(self._identifier.model.outputs_values(memory))
+                fi = np.zeros((memory, len(last_a)))
+                for i in range(memory):
+                    fi[i] = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values(-i))),
+                                                      *list(support.flatten(m.get_u_values(-i))),
+                                                      *last_a))
+                dh[1:] = dh[:-1]
+                dh[0] = outputs_val[0]
+                new_a = Adaptive.simplest_with_memory(last_a, dh, fi)
+            else:
                 h = 0.1 if 'deviation' not in kw else kw['deviation']
+                new_a = last_a.copy()
+                if deep_tuning:
+                    i = 0
+                    delta = 2
+                    is_adaptive_w = False if 'adaptive_weight' not in kw else kw['adaptive_weight']
 
-                while abs(delta) >= 2 * h or i == 0:
-                    grad = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values())),
-                                                     *list(support.flatten(m.get_u_values())),
-                                                     *new_a))
-                    grad_p = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values(-1))),
-                                                       *list(support.flatten(m.get_u_values(-1))),
-                                                       *new_a))
-                    d_grad = grad - grad_p
-                    if all(map(lambda y: y <= np.power(10.0, -10), d_grad)):  # np.finfo(float).eps
-                        break
-                    delta = outputs_val[0] - m.last_x[0] - d_grad[1:] @ new_a[1:]
-                    # delta -= h * np.sign(delta)
-                    new_a = Adaptive.simplest(new_a, delta, d_grad, gamma=1, g_type='factor')  # **kw
+                    while abs(delta) >= 2 * h or i == 0:
+                        grad = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values())),
+                                                         *list(support.flatten(m.get_u_values())),
+                                                         *new_a))
+                        grad_p = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values(-1))),
+                                                           *list(support.flatten(m.get_u_values(-1))),
+                                                           *new_a))
+                        d_grad = grad - grad_p
+                        if all(map(lambda y: y <= np.power(10.0, -10), d_grad)):  # np.finfo(float).eps
+                            break
+                        delta = outputs_val[0] - m.last_x[0] - d_grad[1:] @ new_a[1:]
+                        # delta -= h * np.sign(delta)
+                        new_a = Adaptive.simplest(new_a, delta, d_grad, gamma=1, g_type='factor')  # **kw
 
-                    a0 = outputs_val[0] - m.get_value(new_a) + grad[0] * new_a[0]
-                    if is_adaptive_w:
-                        w = nf(a0 - new_a[0], weight)
-                    else:
-                        w = weight
-                    new_a[0] = new_a[0] + w * (a0 - new_a[0])  # w
-                    i += 1
+                        a0 = outputs_val[0] - m.get_value(new_a) + grad[0] * new_a[0]
+                        if is_adaptive_w:
+                            w = nf(a0 - new_a[0], weight)
+                        else:
+                            w = weight
+                        new_a[0] = new_a[0] + w * (a0 - new_a[0])  # w
+                        i += 1
+                    # print('число глубоких подстроек =', i)
 
-                # print('число глубоких подстроек =', i)
-
-                last_a = new_a
-            discrepancy = outputs_val - m.get_value(last_a)
-            # discrepancy -= h * np.sign(discrepancy)
-            new_a = Adaptive.simplest(last_a, *discrepancy, grad, **kw)  # gamma=g, g_type=g_type,
-            # a0 = outputs_val[0] - m.get_value(new_a) + grad[0]*new_a[0]  # grad @ new_a
-            # new_a[0] = new_a[0] + nf(a0 - new_a[0]) * (a0 - new_a[0])
+                discrepancy = outputs_val - m.get_value(new_a)
+                # discrepancy -= h * np.sign(discrepancy)
+                new_a = Adaptive.simplest(new_a, *discrepancy, grad, **kw)  # gamma=g, g_type=g_type,
 
             return new_a
         elif self._method == 'lsm':  # 6.6.3, 6.6.8
@@ -238,10 +251,16 @@ class Adaptive(Algorithm):   # 6.6
         m = self._identifier.model
         ar_grad = np.zeros((n, len(m.grad)))
         for i in range(n):
-            ar_grad[i] = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values(n=i))),
-                                                   *list(support.flatten(m.get_u_values(n=i))),
+            ar_grad[i] = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values(n=i+1))),  # n=i+1
+                                                   *list(support.flatten(m.get_u_values(n=i+1))),  # n=i+1
                                                    *np.array(m.get_coefficients_value(i))))
         self._matrix_k = Adaptive.find_initial_k(ar_grad, init_weight)
+
+    @staticmethod
+    def simplest_with_memory(last_a, outputs, grads_matrix):
+        # delta = (outputs - last_a @ grads_matrix.T) @ np.linalg.pinv(grads_matrix.T)
+        delta = np.linalg.pinv(grads_matrix.T@grads_matrix)@grads_matrix.T@(outputs - last_a @ grads_matrix.T)
+        return last_a + delta
 
     @staticmethod
     def simplest(last_a, discrepancy, grad, gamma=1, g_type='factor', **kwargs):

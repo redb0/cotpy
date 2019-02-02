@@ -8,6 +8,8 @@
     - Vladimir Voronov
 """
 
+from cotpy.identification import smoothing
+
 
 class Identifier:
     """Класс идентификатора."""
@@ -20,6 +22,13 @@ class Identifier:
         self._last_cov = None
         self._delta = 0  # используется при сглаживании методом экспоненциального забывания информации
         self._last_ap = None
+        self._smoothing = None
+
+    def avr(self, a, last_a, avr_type='std', l=0.9, window_size=1, last_k_a=0):
+        if self._smoothing is None:
+            self._smoothing = smoothing.Smoothing()
+        return self._smoothing.avr(avr_type=avr_type,
+                                   a=a, last_a=last_a, n=self._n, l=l, last_k_a=last_k_a, window_size=window_size)
 
     def min_numb_measurements(self):
         len_a = len(self._model.coefficients)
@@ -41,13 +50,21 @@ class Identifier:
     def update_x(self, x):
         self._model.update_x(x)
 
-    def init_data(self, a=None, x=None, u=None, type_memory='max'):
+    def init_data(self, a=None, x=None, u=None, type_memory='max', memory_size: int=0):
         # TODO: Сделать вычисление _n0 по уже имеющимся данным из model
-        self._model.initialization(a, x, u, type_memory=type_memory)
+        self._model.initialization(a, x, u, type_memory=type_memory, memory_size=memory_size)
         if a:
             self._n0 = len(a[0])
         else:
             self._n0 = len(self._model.coefficients)
+
+    @property
+    def memory_size(self) -> int:
+        return self._model.memory_size
+
+    @property
+    def start_memory_size(self) -> int:
+        return self._model.start_memory_size
 
     def __repr__(self):
         return f'Identifier({repr(self._model)}, n0={self._n0})'

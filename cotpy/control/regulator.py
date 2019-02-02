@@ -256,8 +256,6 @@ class Regulator:
         self._args = [self._desired_output_sp, *sp_vars_x_current, *sp_vars_x, *sp_vars_u[1:], *sp_vars_a]
         expr = sp.solve(self._expr - self._desired_output_sp, sp_vars_u[0])
         self._regulator_expr = expr[0]
-        print('Выражение:', expr[0])
-        print('Аргументы:', self._args)
         self._regulator_func = ufuncify(self._args, expr[0])
 
     def set_limit(self, low, high) -> None:
@@ -276,6 +274,10 @@ class Regulator:
     def expr(self):
         """Sympy выражение закона управления"""
         return self._regulator_expr
+
+    @property
+    def expr_args(self):
+        return self._args
 
     @property
     def func(self):
