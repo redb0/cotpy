@@ -5,13 +5,12 @@ import operator
 from cotpy import support
 import sympy as sp
 import numpy as np
-from cotpy.settings import variable_names
+from cotpy.settings import variable_names, expr_vars, control_law_vars
 from sympy.core.add import Add
 from sympy.utilities.autowrap import ufuncify
 from typing import Union, List, Optional, NoReturn
 
 from cotpy.analyzer.validation import check_brackets
-from cotpy.analyzer.expr_parser import parse_expr
 
 Number = Union[int, float]
 ListNumber = List[Number]
@@ -21,12 +20,15 @@ Matrix = List[ListNumber]
 class Variable:
     # TODO: документация
     def __init__(self, name: str, idx: int,
-                 tao: Optional[int] = None, memory: int = 0, values: ListNumber = None) -> None:
-        self._name = name
+                 tao: Optional[int] = None, memory: int = 0, values: ListNumber = None, var_type='') -> None:
+        self._name = name  # TODO: храть имя типа a, x, xp отдельно
+
         self._idx = idx
         self._tao = tao
         self._memory = memory
         self._values = values
+
+        self._type = var_type
 
     # TODO: возможно сделать через setter
     def add_value(self, val: Number) -> None:
@@ -80,10 +82,22 @@ class Variable:
 
     def update_name_tao(self, tao):  # tao=var.tao - 1
         if tao < 0:
-            if self.name[:len(variable_names['obj'])] == variable_names['obj']:
-                self.name = variable_names['predicted_outputs'] + self.name[len(variable_names['obj']):]
-            elif self.name[:len(variable_names['control'])] == variable_names['control']:
-                self.name = variable_names['predicted_inputs'] + self.name[len(variable_names['control']):]
+            # if self.name[:len(variable_names['obj'])] == variable_names['obj']:
+            #     self.name = variable_names['predicted_outputs'] + self.name[len(variable_names['obj']):]
+            # elif self.name[:len(variable_names['control'])] == variable_names['control']:
+            #     self.name = variable_names['predicted_inputs'] + self.name[len(variable_names['control']):]
+            # elif self.name[:len(expr_vars['add_input'])] == expr_vars['add_input']:
+            #     self.name = control_law_vars['predicted_add_input'] + self.name[len(expr_vars['add_input']):]
+
+            if self._type in expr_vars.keys():
+                self._name = control_law_vars['predicted_'+self._type]
+            # if self._type == expr_vars['output']:
+            #     self._name = control_law_vars['predicted_output']
+            # elif self._type == expr_vars['input']:
+            #     self._name = control_law_vars['predicted_input']
+            # elif self._type == expr_vars['add_input']:
+            #     self._name = control_law_vars['predicted_add_input']
+
         self.update_tao(tao)
 
     def copy_var(self, var):
@@ -94,14 +108,18 @@ class Variable:
         self._values = copy.copy(var.values)
 
     def update_tao(self, new_tao):
-        self._tao = abs(new_tao)
-        items = self._name.split('_')
-        items[-1] = str(self._tao)  # self._tao + 1
-        self._name = '_'.join(items)
+        self._tao = new_tao
+        # items = self._name.split('_')
+        # items[-1] = str(self._tao)  # self._tao + 1
+        # self._name = '_'.join(items)
 
     @property
     def name(self) -> str:
-        return self._name
+        # return self._name
+        if self._tao is None:
+            return f'{self._name}{self._idx}'
+        else:
+            return f'{self._name}{self._idx}_{abs(self._tao)}'
 
     @name.setter
     def name(self, v):
@@ -127,9 +145,10 @@ class Variable:
     def values(self, val) -> None:
         self._values = val
 
-    @property
-    def last_value(self) -> Number:
-        return self._values[-1]
+    def get_last_value(self) -> Number:
+        if self._values is not None or self._values != []:
+            return self._values[-1]
+        raise ValueError('Попытка извлечь значение из пустого списка')
 
     def __repr__(self) -> str:
         return f'Variable({repr(self._name)}, {self._idx}, {self._tao}, {self._memory}, {self._values})'
@@ -194,7 +213,10 @@ class GroupVariable:
             raise ValueError('Не установлен минимальный размер памяти.')
             # заполнить значения
         if len_val >= self._min_memory:
-            self._values = np.array([0. for _ in range(self._add_memory - (self._min_memory - self._max_tao + 1))] + val)
+            amount_additive = self._add_memory - (self._min_memory - self._max_tao + 1)
+            if amount_additive < 0:
+                amount_additive = 0
+            self._values = np.hstack(([0. for _ in range(amount_additive)], val))
             for v in self._vars:
                 v.values = self._values
         else:
@@ -290,12 +312,8 @@ class GroupVariable:
 class Model:
     # TODO: документация
     def __init__(self):
-        # self._expr_str = ''
         self._str_expr = ''
-        self._x = []  # список экземпляров класса GroupVariable
-        self._u = []
-        self._a = []  # список экземпляров класса Variable, у a tao = None всегда
-
+        self._v = dict()
         self._outputs = None
 
         # функции
@@ -306,79 +324,57 @@ class Model:
         self._sp_expr = None
         self._sp_var = []
 
-    def initialization(self, a: Matrix=None, x: Matrix=None, u: Matrix=None,
-                       type_memory: str='max', memory_size: int=0) -> Optional[NoReturn]:
-        if self._a:
-            if a is not None:
-                self.variable_init(a, t='a', type_memory=type_memory)
-            else:
-                self.variable_init(t='a')
-        if self._x:
-            if x is not None:
-                self.variable_init(x, t='x', type_memory=type_memory, memory_size=memory_size)
-            else:
-                self.variable_init(t='x', memory_size=memory_size)
-        else:
-            # создание дополнительного массива при отсутствии массива с иксами
-            if memory_size > 0:
-                if x is not None:
-                    self._outputs = np.array(x[0])
+    def initialization(self, type_memory: str='max', memory_size: int=0, **kwargs) -> Optional[NoReturn]:
+        kw = support.normalize_kwargs(kwargs, alias_map=expr_vars)
+        for k, v in self._v.items():
+            if v and k in kw:
+                self.variable_init(k, kw[k], type_memory=type_memory, memory_size=memory_size)
+            elif k == 'output' and memory_size > 0:
+                if v is not None:
+                    self._outputs = np.array(v[0])
                 else:
                     self._outputs = np.array([0 for _ in range(memory_size)])
-        if self._u:
-            if u is not None:
-                self.variable_init(u, t='u', type_memory=type_memory, memory_size=memory_size)
             else:
-                self.variable_init(t='u', memory_size=memory_size)
+                self.variable_init(t=k, memory_size=memory_size)
 
-    def variable_init(self, values: Matrix=None, t: str='a', type_memory: str='max', memory_size: int=0) -> Optional[NoReturn]:
-        if t not in ['a', 'x', 'u']:
-            raise ValueError(f't = {t}. t not in ["a", "x", "u"]')
-        attr = self.__getattribute__('_' + t)
-        if not attr:
-            raise ValueError(f'Не задан атрибут: _{t}')
-        if values and (len(values) != len(attr)):
-            raise ValueError(f'Передан некорректный массив. '
-                             f'len(values) != len(self._{t}): {len(values)} != {len(attr)}')
+    def variable_init(self, t, values: Matrix=None, type_memory: str='max', memory_size: int=0) -> Optional[NoReturn]:
+        if t not in expr_vars.keys():
+            raise ValueError(f't = {t}. t not in {expr_vars.keys()}')
+        if (values is not None) and (len(values) != len(self._v[t])):
+            raise ValueError(f'Передан некорректный массив, ключ - {repr(t)}. '
+                             f'len(values) != len(self._{t}): {len(values)} != {len(self._v[t])}')
 
-        memory = len(self._a)
-        for i in range(len(attr)):
+        memory = len(self._v['coefficient'])
+        for i in range(len(self._v[t])):
             if values is None:
-                if t == 'a':
-                    attr[i].init_ones(memory)
-                elif t in ['x', 'u']:
-                    attr[i].init_ones(min_memory=memory)
+                if t == 'coefficient':
+                    self._v[t][i].init_ones(memory)  # attr
+                elif t in expr_vars.keys():
+                    self._v[t][i].init_zeros(min_memory=memory)  # attr
             else:
                 if not support.is_rect_matrix(values, min_len=memory):
                     raise ValueError(f'Длина подмассивов атрибута "{t}" должна быть >= {memory}')
-                if t == 'a':
-                    attr[i].initialization(values[i])
-                elif t in ['x', 'u']:
-                    if len(values[i]) < (memory + attr[i].max_tao - 1):
+                if t == 'coefficient':
+                    self._v[t][i].initialization(values[i])  # attr
+                elif t in expr_vars.keys():
+                    if len(values[i]) < (memory + self._v[t][i].max_tao - 1):  # attr
                         raise ValueError(f'Количество элементов атребута "{t}" '
-                                         f'должно быть >= {memory + attr[i].max_tao - 1}')
+                                         f'должно быть >= {memory + self._v[t][i].max_tao - 1}')  # attr
                     if type_memory == 'min':
-                        attr[i].set_memory(memory)
+                        self._v[t][i].set_memory(memory)  # attr
                     elif type_memory == 'max':
-                        max_memory = len(values[i]) - attr[i].max_tao + 1
-                        attr[i].set_memory(max_memory)
+                        max_memory = len(values[i]) - self._v[t][i].max_tao + 1  # attr
+                        self._v[t][i].set_memory(max_memory)  # attr
                     if memory_size > 0:  # memory_size >= memory:
-                        attr[i].set_additional_memory(memory_size)
-                    attr[i].init_values(values[i])
+                        self._v[t][i].set_additional_memory(memory_size)  # attr
+                    self._v[t][i].init_values(values[i])  # attr
 
-    def create_variables(self, data: Union[list, dict], t: str) -> Optional[NoReturn]:
-        variables = []
-        if isinstance(data, list):
-            for item in data:
-                v = Variable(*item)
-                variables.append(v)
-        elif isinstance(data, dict):
-            for key in data.keys():
-                v = Variable(*[key, *data[key]])
-                variables.append(v)
-        name_attr = '_' + t
-        if name_attr in self.__dict__:
-            if t == 'a':
+    def create_var(self, d):
+        for k, v in d.items():
+            variables = []
+            for name, data in v.items():
+                variables.append(Variable(expr_vars[k], *data, var_type=k))  # Variable(name, *data, var_type=k)
+            if k == 'coefficient':
                 variables.sort(key=operator.attrgetter('_idx'))
             else:
                 variables = [
@@ -386,114 +382,149 @@ class Model:
                                                                                 key=operator.attrgetter('_idx')),
                                                                          operator.attrgetter('_idx'))
                 ]
-            self.__setattr__(name_attr, variables)
-        else:
-            raise ValueError(f'Не сущестует атрибута с именем "{name_attr}"')
+            self._v[k] = variables
+            # print(variables)
 
     def generate_func_grad(self) -> Optional[NoReturn]:
         if not self._sp_var:
             raise ValueError('Не сгенерированы sympy переменные')
-        for c in self._a:
-            # print(self._model_expr.diff(c.name))
+        for c in self._v['coefficient']:
+            # print(self._sp_expr.diff(c.name))
             self._grad.append(ufuncify(self._sp_var, self._sp_expr.diff(c.name)))
 
     def generate_sp_var(self) -> None:
-        self._sp_var = sp.var([v.name for v in [*list(support.flatten([g.variables for g in self._x])),
-                                                *list(support.flatten([g.variables for g in self._u])), *self._a]])
+        names = []
+        for item in self._v.values():
+            if item:
+                if isinstance(item[0], GroupVariable):
+                    names += [k.name for k in list(support.flatten([g.variables for g in item]))]
+                else:
+                    names += [k.name for k in item]
+        self._sp_var = sp.var(names)
 
-    def get_x_values(self, n: int=0, is_new: bool=True) -> List[ListNumber]:
-        return [g.all_tao_values(n, is_new=is_new) for g in self._x]
+    def get_var_values(self, t: str, n: int=0, is_new: bool=True):
+        tmp_expr_vars = {v: k for k, v in expr_vars.items()}
+        if t in expr_vars.values():
+            t = tmp_expr_vars[t]
+        elif t not in self._v.keys() or t == 'coefficient':
+            raise ValueError(f'Аргумент t должен принимать одно из значений: '
+                             f'{repr(k) for k in self._v.keys() if k != "coefficient"}')
+        return [g.all_tao_values(n=n, is_new=is_new) for g in self._v[t]]
 
-    def get_u_values(self, n: int=0, is_new: bool=True) -> List[ListNumber]:
-        return [g.all_tao_values(n, is_new=is_new) for g in self._u]
-
-    def get_last_model_value(self) -> Number:
-        return self._func_model(*list(support.flatten(self.get_x_values())),
-                                *list(support.flatten(self.get_u_values())),
-                                *self.last_a)
+    def get_last_model_value(self) -> Number:  # TODO: Убрать и сделать один метод get_model_value
+        return self._func_model(*list(support.flatten(self.get_var_last_value().values())))
 
     def get_value(self, a: Optional[ListNumber]) -> Number:
         if a is None:
             return self.get_last_model_value()
         else:
-            return self._func_model(*list(support.flatten(self.get_x_values())),
-                                    *list(support.flatten(self.get_u_values())),
-                                    *a)
+            val = self.get_var_last_value()
+            val['coefficient'] = a
+            return self._func_model(*list(support.flatten(val.values())))
 
     def generate_model_func(self) -> None:
         self._func_model = ufuncify(self._sp_var, self._sp_expr)
 
-    # def get_grad_value(self, x=(), u=(), a=()) -> ListNumber:
-    #     return [f(*x, *u, *a) for f in self._grad]
+    def get_grad_value(self, *args, **kwargs) -> ListNumber:
+        if args:
+            return [f(*args) for f in self._grad]
+        elif kwargs:
+            kw = support.normalize_kwargs(kwargs, alias_map=expr_vars)
+            val = self.get_var_last_value()
+            for k in val.keys():
+                if k in kw:
+                    val[k] = kw[k]
+            return [f(*list(support.flatten(val.values()))) for f in self._grad]
+        else:
+            return [f(*list(support.flatten(self.get_var_last_value().values()))) for f in self._grad]
 
-    def get_grad_value(self, *args) -> ListNumber:
-        return [f(*args) for f in self._grad]
+    def update_data(self, **kwargs) -> Optional[NoReturn]:
+        if not kwargs:
+            return
+        kw = support.normalize_kwargs(kwargs, alias_map=expr_vars)
+        for k, v in self._v.items():
+            if k == 'output' and k in kw:
+                self.update_x(kw['output'])
+            if v and k in kw:
+                self.update_var_value(kw[k], var=k)
 
-    def get_last_grad_value(self):
-        return self.get_grad_value(*list(support.flatten(self.get_x_values())),
-                                   *list(support.flatten(self.get_u_values())),
-                                   *self.last_a)
+    def update_var_value(self, value, var: str):
+        if var not in self._v.keys():
+            raise ValueError(f'Аргумент value может принимать одно из значений: {repr(k) for k in self._v.keys()}')
+        l = len(self._v[var])
+        if len(value) != l:
+            raise ValueError(f'Длина массива value должна быть = {l}')
+        for i in range(l):
+            self._v[var][i].update(value[i])
 
-    def update_data(self, a: ListNumber=None, u: ListNumber=None, x: ListNumber=None) -> Optional[NoReturn]:
-        if self._a:
-            if a is not None:
-                self.update_a(a)
-            else:
-                raise AttributeError(f'Требуется обновление коэффициентов. Передано значение: {a}')
-        if self._x:
-            if x is not None:
-                self.update_x(x)
-            else:
-                raise AttributeError(f'Требуется обновление выходов. Передано значение: {x}')
-        if self._u:
-            if u is not None:
-                self.update_u(u)
-            else:
-                raise AttributeError(f'Требуется обновление входов. Передано значение: {u}')
+    def update_a(self, value: ListNumber) -> None:
+        self.update_var_value(value, var='coefficient')
+        # len_a = len(self._v['coefficient'])
+        # if len(a) != len_a:
+        #     raise ValueError(f'Длина массива {a} должна быть = {len_a}. {len_a} != {len(a)}')
+        # for i in range(len_a):
+        #     self._v['coefficient'][i].update(a[i])
 
-    def update_a(self, a: ListNumber) -> None:
-        len_a = len(self._a)
-        if len(a) != len_a:
-            raise ValueError(f'Длина массива {a} должна быть = {len_a}. {len_a} != {len(a)}')
-        for i in range(len_a):
-            self._a[i].update(a[i])
-
-    def update_x(self, val: ListNumber) -> None:
-        if self._x:
-            len_x = len(self._x)
-            if len_x != len(val):
-                raise ValueError(f'Длина массива {val} должна быть = {len_x}. {len_x} != {len(val)}')
-            for i in range(len_x):  # группы
-                self._x[i].update(val[i])
+    def update_x(self, value: ListNumber) -> None:
+        if self._v['output']:
+            self.update_var_value(value, var='output')
+            # len_x = len(self._v['output'])
+            # if len_x != len(val):
+            #     raise ValueError(f'Длина массива {val} должна быть = {len_x}. {len_x} != {len(val)}')
+            # for i in range(len_x):  # группы
+            #     self._v['output'][i].update(val[i])
         else:
             self._outputs[:-1] = self._outputs[1:]
-            self._outputs[-1] = val[0]
+            self._outputs[-1] = value[0]
 
-    def update_u(self, val: ListNumber) -> None:
-        len_u = len(self._u)
-        if len_u != len(val):
-            raise ValueError(f'Длина массива {val} должна быть = {len_u}. {len_u} != {len(val)}')
-        for i in range(len_u):  # группы
-            self._u[i].update(val[i])
+    def update_u(self, value: ListNumber) -> None:
+        self.update_var_value(value, var='input')
+        # len_u = len(self._v['input'])
+        # if len_u != len(val):
+        #     raise ValueError(f'Длина массива {val} должна быть = {len_u}. {len_u} != {len(val)}')
+        # for i in range(len_u):  # группы
+        #     self._v['input'][i].update(val[i])
+
+    def update_z(self, value: ListNumber) -> None:
+        self.update_var_value(value, var='add_input')
 
     def set_add_memory(self, n: int) -> None:
         # TODO: возможно сделать изменение памяти без удаления существующих значений
         if n > 0:
-            if self._x:
-                for group in self._x:
+            if self._v['output']:
+                for group in self._v['output']:
                     group.set_additional_memory(n)
             else:
                 self._outputs = np.array([0 for _ in range(n)])
-            if self._u:
-                for group in self._u:
+            if self._v['input']:
+                for group in self._v['input']:
                     group.set_additional_memory(n)
         else:
             raise ValueError(f'Величина памяти должна быть >= 0')
 
+    def get_var_last_value(self):
+        res = dict()
+        for k, v in self._v.items():
+            if v:
+                if isinstance(v[0], GroupVariable):
+                    res[k] = [g.all_tao_values(0, is_new=True) for g in self._v[k]]
+                else:
+                    res[k] = [a.get_last_value() for a in v]
+        return res
+
+    def get_all_var_values(self):
+        res = dict()
+        for k, v in self._v.items():
+            if v:
+                res[k] = [a.values for a in v]
+            else:
+                res[k] = []
+        return res
+
     @property
     def memory_size(self) -> int:
-        if self._x:
-            return self._x[0].memory_size
+        if self._v['output']:
+            return self._v['output'][0].memory_size
         elif self._outputs is not None:
             return len(self._outputs)
         else:
@@ -501,7 +532,7 @@ class Model:
 
     @property
     def start_memory_size(self) -> int:
-        return self._x[0].start_memory_size
+        return self._v['output'][0].start_memory_size
 
     @property
     def str_expr(self) -> str:
@@ -518,70 +549,74 @@ class Model:
 
     @property
     def inputs(self) -> List[GroupVariable]:
-        return self._u
+        return self._v['input']
 
     @property
     def outputs(self) -> List[GroupVariable]:
-        return self._x
+        return self._v['output']
 
     def outputs_values(self, p: int):
-        if self._x:
-            return [list(support.flatten(self.get_x_values(-i)))[0] for i in range(p)]
+        if self._v['output']:
+            return [list(support.flatten(self.get_var_values(t='output', n=-i)))[0] for i in range(p)]
         else:
             # print('получение выходов:', self._outputs[-p:])
             return self._outputs[-p:]
 
     @property
     def coefficients(self) -> ListVars:
-        return self._a
+        return self._v['coefficient']
 
-    @property
-    def a_values(self) -> List[ListNumber]:
-        return [a.values for a in self._a]
+    # @property
+    # def a_values(self) -> List[ListNumber]:
+    #     return [a.values for a in self._v['coefficient']]
 
-    @property
-    def x_values(self) -> List[ListNumber]:
-        return [g.values for g in self._x]
+    # @property
+    # def x_values(self) -> List[ListNumber]:
+    #     return [g.values for g in self._v['output']]
 
-    @property
-    def u_values(self) -> List[ListNumber]:
-        return [g.values for g in self._u]
+    # @property
+    # def u_values(self) -> List[ListNumber]:
+    #     return [g.values for g in self._v['input']]
 
     @property
     def last_a(self) -> ListNumber:
-        return [c.last_value for c in self._a]
+        return [c.get_last_value() for c in self._v['coefficient']]
 
     @property
     def last_x(self) -> ListNumber:
-        return [group.last_value for group in self._x]
+        return [group.last_value for group in self._v['output']]  # get_last_value()
 
     @property
     def last_u(self) -> ListNumber:
-        return [group.last_value for group in self._u]
+        return [group.last_value for group in self._v['input']]  # get_last_value()
 
     def get_outputs_value(self, i: int):
-        if not self._x:
+        if not self._v['output']:
             return []
-        if i < len(self._a):
-            return [group.values[i] for group in self._x]
+        if i < len(self._v['coefficient']):
+            return [group.values[i] for group in self._v['output']]
         else:
             pass
 
     def get_inputs_value(self, i: int):
-        if not self._u:
+        if not self._v['input']:
             return []
-        if i < len(self._a):
-            return [group.values[i] for group in self._u]
+        if i < len(self._v['coefficient']):
+            return [group.values[i] for group in self._v['input']]
         else:
             pass
 
     def get_coefficients_value(self, i: int):
-        if not self._a:
+        if not self._v['coefficient']:
             return []
-        if i < len(self._a):
-            return [c.values[i] for c in self._a]
+        if i < len(self._v['coefficient']):
+            return [c.values[i] for c in self._v['coefficient']]
         else:
             pass
+
+    @property
+    def model_vars(self):
+        return self._v
 
     @property
     def grad(self):  # list[numpy.ufunc]
@@ -590,6 +625,10 @@ class Model:
     @property
     def func_model(self):  # numpy.ufunc
         return self._func_model
+
+    @property
+    def sp_var(self):
+        return self._sp_var
 
     def __repr__(self):
         pass
@@ -602,15 +641,28 @@ def create_model(expr: str) -> Model:
     # TODO: документация
     if not check_brackets(expr, brackets='()'):
         raise ValueError('Некорректно расставлены скобки')
-    model_expr, x_names, u_names, a_names = parse_expr(expr)
+    from cotpy.de_parser.parser import expr_parse
+    model_expr, model_vars = expr_parse(expr)
     model = Model()
-    # model.expr_str = expr
     model.str_expr = model_expr  # строковое и sympy выражения сохранены
-    model.create_variables(x_names, t='x')
-    model.create_variables(u_names, t='u')
-    model.create_variables(a_names, t='a')  # переменные сгенерированы
+    model.create_var(model_vars)
     model.generate_sp_var()  # sympy переменные сгенерированы
     model.generate_func_grad()  # градиенты посчитаны
     model.generate_model_func()  # сгенерирована функция расчета значения модели
 
     return model
+
+
+def main():
+    expr = "a0+a1*x(t-1)+a2*x(t-2)+a3*u(t-6)+a4*u(t-7)+a5*z1(t-1)+a6*z2(t-1)"
+    m = create_model(expr)
+    a = [[1, 1, 1, 1, 1, 0, 5], [1, 1, 1, 1, 1, 1, 6],
+         [1, 1, 1, 1, 1, 2, 7], [1, 1, 1, 1, 1, 3, 8],
+         [1, 1, 1, 1, 1, 4, 9], [1, 1, 1, 1, 1, 3, 10], [1, 1, 1, 1, 1, 2, 11]]
+
+    m.initialization(type_memory='max', memory_size=0, a=a)
+
+    print(m.get_all_var_values())
+
+if __name__ == '__main__':
+    main()

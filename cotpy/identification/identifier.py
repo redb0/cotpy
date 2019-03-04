@@ -50,10 +50,13 @@ class Identifier:
     def update_x(self, x):
         self._model.update_x(x)
 
-    def init_data(self, a=None, x=None, u=None, type_memory='max', memory_size: int=0):
+    def update_z(self, z):
+        self._model.update_z(z)
+
+    def init_data(self, a=None, type_memory='max', memory_size: int=0, **kwargs):
         # TODO: Сделать вычисление _n0 по уже имеющимся данным из model
-        self._model.initialization(a, x, u, type_memory=type_memory, memory_size=memory_size)
-        if a:
+        self._model.initialization(a=a, type_memory=type_memory, memory_size=memory_size, **kwargs)
+        if a is not None:
             self._n0 = len(a[0])
         else:
             self._n0 = len(self._model.coefficients)

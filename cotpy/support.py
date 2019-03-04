@@ -49,7 +49,7 @@ def is_rect_matrix(m, sub_len=0, min_len=0) -> bool:
     return True
 
 
-def normalize_kwargs(kw, alias_map=None):
+def normalize_kwargs(kw, alias_map=None, strict_compliance=False):
     """
     Вспомогательная функция для нормализации именованных аргументов.
     
@@ -78,6 +78,10 @@ def normalize_kwargs(kw, alias_map=None):
                       Если каноническое значение отсутствует в списке, 
                       предполагается, что оно имеет наивысший приоритет.
     :type alias_map : dict, optional
+    :param strict_compliance: Флаг строго соответсвия ключей из kw и alias_map. 
+                              Если имеются ключи, которых нет в alias_map или 
+                              которые указаны в alias_map, поднимается исключение.
+    :type strict_compliance: bool
     :return: Словарь нормализованных именованных аргументов.
     :rtype : dict
     """
@@ -101,6 +105,12 @@ def normalize_kwargs(kw, alias_map=None):
                 warnings.warn(f'Все псевдонимы kwargs {seen_key!r} относятся к '
                               f'{canonical!r}. Будет применен только {seen_key[0]!r}')
     res.update(kw)
+
+    fail_keys = [k for k in res.keys() if k not in alias_map]
+    if strict_compliance and fail_keys:
+        raise TypeError(f"Не разрешенные ключи {fail_keys} в kwargs")
+    fail_keys = [k for k in alias_map if k not in res.keys()]
+    if strict_compliance and fail_keys:
+        raise TypeError(f"Ключей {fail_keys} нет в kwargs")
+
     return res
-
-

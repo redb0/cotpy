@@ -8,7 +8,7 @@ import copy
 
 import numpy as np
 import sympy as sp
-from cotpy.settings import variable_names
+from cotpy.settings import control_law_vars
 from sympy.utilities.autowrap import ufuncify
 
 from cotpy import support
@@ -39,12 +39,12 @@ class Regulator:
         """
         self._model = m
         self._expr = self._model.sp_expr
-        self._desired_output_sp = sp.var(variable_names['trajectory'])
+        self._desired_output_sp = sp.var(control_law_vars['trajectory'])
         self._forecasts = []
         self._forecasts_vars = []  # [(x, u); ...]
-        self._base_vars = []
-        self._predicted_x = copy.deepcopy(self._model.outputs)
-        self._predicted_u = copy.deepcopy(self._model.inputs)
+        self._base_vars = {}
+        var = self.model.model_vars
+        self._predicted_vars = copy.deepcopy({k: var[k] for k in var.keys() if k != 'coefficient'})
         self._regulator_expr = None
         self._regulator_func = None
         self._args = []
@@ -76,52 +76,44 @@ class Regulator:
                 if u[i] >= limit:
                     u[i] = limit
 
-    def update(self, output, setpoint, *args, **kwargs):
+    def update(self, output, setpoint, ainputs=(), *args, **kwargs):
         """
         Метод расчета управляющего воздействия.
-        :param output        : значение выхода объекта
-        :type output         : number or list
+        :param output  : значение выхода объекта
+        :type output   : number or list
         :param setpoint: значение уставки (желаемой трактории движения объекта)
         :type setpoint : number or list
-        :param args          : -
-        :param kwargs        : -
+        :param ainputs : значения дополнительных входов модели (по умолчанию обозначенных 'z')
+        :type ainputs  : number or list
+        :param args    : -
+        :param kwargs  : -
         :return: значение управляющего воздействия
         :rtype : number or list
         :raises TypeError: если output не является числом или списком
         """
-        x_val = []
-        xs = self._model.outputs
-        for i in range(len(self._predicted_x)):
-            v = self._predicted_x[i].variables
-            for j in range(len(v)):
-                if v[j].tao != 0:
-                    x_val.append(xs[i].values[-v[j].tao])
-        u_val = []
-        us = self._model.inputs
-        for i in range(len(self._predicted_u)):
-            v = self._predicted_u[i].variables
-            for j in range(len(v)):
-                if v[j].tao != 0:
-                    u_val.append(us[i].values[-v[j].tao])
+        var_values = []
+        variables = self._model.model_vars
+        for k, v in self._predicted_vars.items():
+            values = []
+            for idx_group in range(len(v)):
+                var_group = v[idx_group].variables
+                for i in range(len(var_group)):
+                    if var_group[i].tao != 0:
+                        values.append(variables[k][idx_group].values[-var_group[i].tao])
+            var_values.append(values)
+
         last_a = np.array(self._model.last_a)
 
         if isinstance(setpoint, (int, float)):
             setpoint = [setpoint]
         if isinstance(output, (int, float)):
             output = [output]
-        if isinstance(output, (list, np.ndarray)):
-            if len(output) == 1 and len(self._predicted_x) == 1:
-                u = self._regulator_func(*setpoint, *output, *x_val, *u_val, *last_a)
-                u = np.array([u])
-                self.apply_restrictions(u)
-                return u
-            elif len(output) > 1 and len(self._predicted_x) > 1:
-                u = self._regulator_func(*setpoint, *output, *x_val, *u_val, *last_a)
-                u = np.array([u])
-                self.apply_restrictions(u)
-                return u
-            else:
-                TypeError(f'Аргумент output некорректного типа: {type(output)}.')
+        if isinstance(ainputs, (int, float)):
+            ainputs = [ainputs]
+        u = self._regulator_func(*np.hstack(var_values), *last_a, *setpoint, *output, *ainputs)
+        u = np.array([u])
+        self.apply_restrictions(u)
+        return u
 
     def forecast_one_step(self):
         """
@@ -131,10 +123,11 @@ class Regulator:
         а переменные в self._forecasts_vars.
         :return: None
         """
-        self.update_expr(self._predicted_x)
-        self.update_expr(self._predicted_u)
+        for k, v in self._predicted_vars.items():
+            self.update_expr(v)
+
         self._forecasts.append(self._expr)
-        self._forecasts_vars.append((copy.deepcopy(self._predicted_x), copy.deepcopy(self._predicted_u)))
+        self._forecasts_vars.append((copy.deepcopy(v) for v in self._predicted_vars.values()))
 
     def update_expr(self, variables):
         """
@@ -183,30 +176,21 @@ class Regulator:
         
         :return:  None
         """
-        for i in range(len(self._predicted_x)):  # по группам
+        predicted_x = self._predicted_vars['output']
+        for idx_group in range(len(predicted_x)):  # по группам
             j = 0
             replacement = False
-            while j < len(self._predicted_x[i].variables):  # по переменным
-                obj = self._predicted_x[i].variables[j]
-                if obj.tao == 1 and obj.name[:len(variable_names['predicted_outputs'])] == variable_names['predicted_outputs']:
+            while j < len(predicted_x[idx_group].variables):  # по переменным
+                obj = predicted_x[idx_group].variables[j]
+                if obj.tao == -1 and obj.name[:len(control_law_vars['predicted_output'])] == control_law_vars['predicted_output']:
                     self._expr = self._expr.subs({sp.var(obj.name): self._forecasts[0]})
-                    self._predicted_x[i].variables.pop(j)
+                    predicted_x[idx_group].variables.pop(j)
                     replacement = True
                 j += 1
             if replacement:
-                self._predicted_x[i].add_unique_var(self._base_vars[0][i].variables)
-                self._predicted_u[i].add_unique_var(self._base_vars[1][i].variables)
-
-            # for j in range(len(self._predicted_x[i].variables)):  # по переменным
-            #     obj = self._predicted_x[i].variables[j]
-            #     if obj.tao == 1 and obj.name[:len(variable_names['predicted_outputs'])] == variable_names['predicted_outputs']:
-            #         self._expr = self._expr.subs({sp.var(obj.name): self._forecasts[0]})
-            #
-            #         obj.copy_var(self._base_vars[0][i].variables[j])  # FIXME: сделать удаление этой переменной и копирование всех вставленных переменных, если их нет!!!!!!
-            #         self.copy_vars(self._predicted_u, self._base_vars[1])
-            #     else:
-            #         new_vars.append(copy.copy(obj))
-            # self._predicted_x[i].sorted_var()
+                for k, v in self._predicted_vars.items():
+                    for i in range(len(v)):
+                        v[i].add_unique_var(self._base_vars[k][i].variables)
 
     def var_replace(self, old_name, new_name):
         """Метод замены переменных в sympy выражении модели"""
@@ -236,25 +220,34 @@ class Regulator:
 
         :return: None
         """
-        if not self._predicted_u:
-            pass
-        min_tao: int = min([g.min_tao for g in self._predicted_u])
+        # if not self._predicted_u:
+        #     pass
+        min_tao: int = min([g.min_tao for g in self._predicted_vars['input']])
+        # print('min_tao =', min_tao)
         step = 0
         while step < min_tao:
             # e = self._expr
             self.forecast_one_step()
             self.expr_subs()
             if step == 0:
-                self._base_vars = (copy.deepcopy(self._predicted_x), copy.deepcopy(self._predicted_u))
+                self._base_vars = {k: copy.deepcopy(v) for k, v in self._predicted_vars.items()}
             step += 1
 
-        sp_vars_x_current = sp.var([i[0].name for i in (g.variables for g in self._predicted_x) if i[0].tao == 0])
-        sp_vars_x = sp.var([i.name for i in support.flatten([g.variables for g in self._predicted_x]) if i.tao != 0])
-        sp_vars_u = sp.var([i.name for i in support.flatten([g.variables for g in self._predicted_u])])
+        sp_var = []
+        sp_current_vars = dict()
+        for k, v in self._predicted_vars.items():
+            sp_current_vars[k] = []
+            for item in support.flatten([g.variables for g in v]):
+                if item.tao != 0:
+                    sp_var.append(sp.var(item.name))
+                else:
+                    sp_current_vars[k].append(sp.var(item.name))
+
         sp_vars_a = sp.var([i.name for i in self._model.coefficients])
 
-        self._args = [self._desired_output_sp, *sp_vars_x_current, *sp_vars_x, *sp_vars_u[1:], *sp_vars_a]
-        expr = sp.solve(self._expr - self._desired_output_sp, sp_vars_u[0])
+        self._args = [*sp_var, *sp_vars_a, self._desired_output_sp,
+                      *np.hstack([v for k, v in sp_current_vars.items() if k != 'input'])]
+        expr = sp.solve(self._expr - self._desired_output_sp, sp_current_vars['input'][0])
         self._regulator_expr = expr[0]
         self._regulator_func = ufuncify(self._args, expr[0])
 
