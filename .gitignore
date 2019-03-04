@@ -4,12 +4,16 @@ __pycache__
 .pytest_cache
 .mypy_cache
 cotpy/__pycache__
-cotpy/analyzer/__pycache__
 cotpy/control/__pycache__
 cotpy/identification/__pycache__
 cotpy/tests/__pycache__
+cotpy/de_parser/__pycache__
+cotpy/de_parser/tests/__pycache__
 
+cotpy/analyzer
+cotpy/de_parser/tests
 nk.py
+for_arduino.py
 
 dist/
 MANIFEST

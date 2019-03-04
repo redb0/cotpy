@@ -31,6 +31,30 @@
 from typing import Dict, Union
 
 
+expr_vars = {  # 'expr.'
+    'coefficient': 'a',
+    'output': 'x',
+    'input': 'u',
+    'add_input': 'z',
+    # 'expr.error': 'e',  # ошибка
+    # 'expr.unknown_impact': 'h',  # неизвестное воздействие
+}
+
+control_law_vars = {  # 'control_law.'
+    'predicted_output': 'xp',
+    'predicted_input': 'up',
+    'predicted_add_input': 'zp',
+    'trajectory': 'xt',
+}
+
+parameters = {
+    'time': 't',
+    'delimiter': '_',
+    'default_index': 0,
+    'auto_index': False
+}
+
+
 variable_names: Dict[str, str] = {
     'obj': 'x',
     'control': 'u',
