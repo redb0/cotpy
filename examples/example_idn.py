@@ -96,7 +96,7 @@ def smp_nonlinear_model(plotting=False):
     m_ar = np.zeros((n,))
     u_ar = [i+1 for i in range(n)]
     for i in range(n):
-        obj_val = [obj(*idn.model.last_x, *idn.model.get_u_values()[0])]
+        obj_val = [obj(*idn.model.last_x, *idn.model.get_var_values(t='u')[0])]
         new_a = smp.update(obj_val)
         idn.update_x(obj_val)
         idn.update_u([u_ar[i]])
@@ -129,7 +129,7 @@ def lsm_linear_model(plotting=False):
     m_ar = np.zeros((n,))
     u_ar = [i + 1 for i in range(n)]
     for i in range(n):
-        obj_val = [obj(*idn.model.last_x, *idn.model.get_u_values()[0])]
+        obj_val = [obj(*idn.model.last_x, *idn.model.get_var_values(t='u')[0])]
         new_a = lsm.update(obj_val, w=0.01, init_weight=0.01)
         idn.update_x(obj_val)
         idn.update_u([u_ar[i]])
