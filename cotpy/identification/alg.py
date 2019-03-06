@@ -52,6 +52,14 @@ def nf(x, w):
         # return w
 
 
+def get_weighted_fm(fm_val, discrepancy, weight, is_adaptive_w):
+    if is_adaptive_w:
+        w = nf(discrepancy - fm_val, weight)
+    else:
+        w = weight
+    return fm_val + w * (discrepancy - fm_val)
+
+
 # def scalar_product(m1: np.ndarray, m2: np.ndarray, weight: Union[Number, ListNumber, np.ndarray]) -> np.ndarray: ...
 def scalar_product(m1, m2, weight):  # orthogonality_matrix=None
     # 6.3.6, 6.3.8
@@ -129,15 +137,12 @@ class Adaptive(Algorithm):   # 6.6
         kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
         m = self._identifier.model
         last_a = np.array(m.last_a)
-        # grad = np.array(m.get_grad_value(*list(support.flatten(m.get_x_values())),
-        #                                  *list(support.flatten(m.get_u_values())),
-        #                                  *last_a))
-        grad = np.array(m.get_grad_value())  # *list(support.flatten(m.get_var_last_value().values()))
+        grad = np.array(m.get_grad_value())
         if self._method in ['simplest', 'smp']:
             weight = 0.9 if 'weight' not in kw else kw['weight']
             deep_tuning = False if 'deep_tuning' not in kw else kw['deep_tuning']
             use_memory = False if 'use_memory' not in kw else kw['use_memory']
-            if use_memory:  # and (self._identifier.n + self._identifier.model.start_memory_size) >= self._identifier.model.memory_size
+            if use_memory:
                 memory = self._identifier.model.memory_size
                 if memory <= 0:
                     raise ValueError('Величина памяти должна быть > 0')
@@ -146,8 +151,8 @@ class Adaptive(Algorithm):   # 6.6
                 fi = np.zeros((memory, len(last_a)))
                 for i in range(memory):
                     fi[i] = np.array(m.get_grad_value(coefficient=last_a,
-                                                      output=flatten(m.get_var_values(t='output', n=-i)),  # get_x_values
-                                                      input=flatten(m.get_var_values(t='input', n=-i)),  # get_u_values
+                                                      output=flatten(m.get_var_values(t='output', n=-i)),
+                                                      input=flatten(m.get_var_values(t='input', n=-i)),
                                                       add_input=flatten(m.get_var_values(t='add_input', n=-i))
                                                       ))
                 dh[1:] = dh[:-1]
@@ -162,25 +167,23 @@ class Adaptive(Algorithm):   # 6.6
                     is_adaptive_w = False if 'adaptive_weight' not in kw else kw['adaptive_weight']
 
                     while abs(delta) >= 2 * h or i == 0:
-                        grad = np.array(m.get_grad_value(coefficient=new_a))  #output=list(support.flatten(m.get_x_values())), input=list(support.flatten(m.get_u_values()))
+                        grad = np.array(m.get_grad_value(coefficient=new_a))
                         grad_p = np.array(m.get_grad_value(coefficient=new_a,
-                                                           output=flatten(m.get_var_values(t='output', n=-1)),  # get_x_values
-                                                           input=flatten(m.get_var_values(t='input', n=-1)),  # get_u_values
+                                                           output=flatten(m.get_var_values(t='output', n=-1)),
+                                                           input=flatten(m.get_var_values(t='input', n=-1)),
                                                            add_input=flatten(m.get_var_values(t='add_input', n=-1))
                                                            ))
                         d_grad = grad - grad_p
                         if all(map(lambda y: y <= np.power(10.0, -10), d_grad)):  # np.finfo(float).eps
                             break
-                        delta = outputs_val[0] - m.last_x[0] - d_grad[1:] @ new_a[1:]
+                        delta = outputs_val[0] - m.last_x[0] - d_grad @ new_a  # d_grad[1:] @ new_a[1:]
                         # delta -= h * np.sign(delta)
                         new_a = Adaptive.simplest(new_a, delta, d_grad, gamma=1, g_type='factor')  # **kw
 
-                        a0 = outputs_val[0] - m.get_value(new_a) + grad[0] * new_a[0]
-                        if is_adaptive_w:
-                            w = nf(a0 - new_a[0], weight)
-                        else:
-                            w = weight
-                        new_a[0] = new_a[0] + w * (a0 - new_a[0])  # w
+                        idx_fm = m.get_index_fm()
+                        if idx_fm is not None:
+                            a0 = outputs_val[0] - m.get_value(new_a) + grad[idx_fm] * new_a[idx_fm]
+                            new_a[idx_fm] = get_weighted_fm(new_a[idx_fm], a0, weight, is_adaptive_w)
                         i += 1
                     # print('число глубоких подстроек =', i)
 
@@ -211,20 +214,18 @@ class Adaptive(Algorithm):   # 6.6
                 #                                  add_input=[]))
                 # grad = np.array(m.get_grad_value(coefficient=last_a))
                 grad_p = np.array(m.get_grad_value(coefficient=last_a,
-                                                   output=flatten(m.get_var_values(t='output', n=-1)),  # get_x_values
-                                                   input=flatten(m.get_var_values(t='input', n=-1)),  # get_u_values
+                                                   output=flatten(m.get_var_values(t='output', n=-1)),
+                                                   input=flatten(m.get_var_values(t='input', n=-1)),
                                                    add_input=flatten(m.get_var_values(t='add_input', n=-1))
                                                    ))
                 d_grad = grad - grad_p
-                delta = outputs_val[0] - m.last_x[0] - d_grad[1:] @ last_a[1:]
+                delta = outputs_val[0] - m.last_x[0] - d_grad @ last_a  # d_grad[1:] @ last_a[1:]
                 new_a, self._matrix_k = Adaptive.lsm(last_a, delta, d_grad, self._matrix_k, weight, _lambda)  # **kw
 
-                a0 = outputs_val[0] - m.get_value(new_a) + grad[0] * new_a[0]
-                if is_adaptive_w:
-                    w = nf(a0 - new_a[0], 0.9)  # FIXME: заменить 0,9 на параметр
-                else:
-                    w = 0.9
-                new_a[0] = new_a[0] + w * (a0 - new_a[0])  # w
+                idx_fm = m.get_index_fm()
+                if idx_fm is not None:
+                    a0 = outputs_val[0] - m.get_value(new_a) + grad[idx_fm] * new_a[idx_fm]
+                    new_a[idx_fm] = get_weighted_fm(new_a[idx_fm], a0, 0.9, is_adaptive_w)
             else:
                 discrepancy = outputs_val - m.get_value(last_a)
                 new_a, self._matrix_k = Adaptive.lsm(last_a, discrepancy, grad, self._matrix_k, weight, _lambda)
@@ -270,8 +271,8 @@ class Adaptive(Algorithm):   # 6.6
         ar_grad = np.zeros((n, len(m.grad)))
         for i in range(n):
             ar_grad[i] = np.array(m.get_grad_value(coefficient=np.array(m.get_coefficients_value(i)),
-                                                   output=flatten(m.get_var_values(t='output', n=i+1)),  # get_x_values
-                                                   input=flatten(m.get_var_values(t='input', n=i+1)),  # get_u_values
+                                                   output=flatten(m.get_var_values(t='output', n=i+1)),
+                                                   input=flatten(m.get_var_values(t='input', n=i+1)),
                                                    add_input=flatten(m.get_var_values(t='add_input', n=i+1))
                                                    ))
         self._matrix_k = Adaptive.find_initial_k(ar_grad, init_weight)

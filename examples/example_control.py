@@ -309,6 +309,10 @@ def example_4(use_lsm=False):
     m = model.create_model(expr)
     idn = identifier.Identifier(m)
     print('Модель:', m.sp_expr)
+    if m.get_index_fm() is not None:
+        print(f'Индекс свободного члена {m.get_index_fm()}')
+    else:
+        print('Нет свободного члена')
 
     if use_lsm:
         init_x = [[20, 20, 20.4, 20.764, 21.246, 21.528]]
@@ -345,7 +349,7 @@ def example_4(use_lsm=False):
         if use_lsm:
             new_a = algorithm.update(x, w=0.01, init_weight=0.01, uinc=True, adaptive_weight=False)
         else:
-            new_a = algorithm.update(x, gamma=1, gt='a', weight=0.9, h=0.1, deep_tuning=True, aw=True, use_memory=True)
+            new_a = algorithm.update(x, gamma=1, gt='a', weight=0.9, h=0.1, deep_tuning=True, aw=True, use_memory=False)
 
         idn.update_a(new_a)
 
@@ -785,7 +789,7 @@ def main():
     # example_1()
     # example_2()
     # example_3()
-    example_4()
+    example_4(use_lsm=True)
     # example_5()
     # example_6()
 

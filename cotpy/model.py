@@ -315,7 +315,7 @@ class Model:
         self._str_expr = ''
         self._v = dict()
         self._outputs = None
-
+        self._index_free_member = None
         # функции
         self._grad = []
         self._func_model = None
@@ -390,7 +390,10 @@ class Model:
             raise ValueError('Не сгенерированы sympy переменные')
         for c in self._v['coefficient']:
             # print(self._sp_expr.diff(c.name))
+            expr_grad = self._sp_expr.diff(c.name)
             self._grad.append(ufuncify(self._sp_var, self._sp_expr.diff(c.name)))
+            if expr_grad == 1:
+                self._index_free_member = len(self._grad) - 1
 
     def generate_sp_var(self) -> None:
         names = []
@@ -459,31 +462,16 @@ class Model:
 
     def update_a(self, value: ListNumber) -> None:
         self.update_var_value(value, var='coefficient')
-        # len_a = len(self._v['coefficient'])
-        # if len(a) != len_a:
-        #     raise ValueError(f'Длина массива {a} должна быть = {len_a}. {len_a} != {len(a)}')
-        # for i in range(len_a):
-        #     self._v['coefficient'][i].update(a[i])
 
     def update_x(self, value: ListNumber) -> None:
         if self._v['output']:
             self.update_var_value(value, var='output')
-            # len_x = len(self._v['output'])
-            # if len_x != len(val):
-            #     raise ValueError(f'Длина массива {val} должна быть = {len_x}. {len_x} != {len(val)}')
-            # for i in range(len_x):  # группы
-            #     self._v['output'][i].update(val[i])
         else:
             self._outputs[:-1] = self._outputs[1:]
             self._outputs[-1] = value[0]
 
     def update_u(self, value: ListNumber) -> None:
         self.update_var_value(value, var='input')
-        # len_u = len(self._v['input'])
-        # if len_u != len(val):
-        #     raise ValueError(f'Длина массива {val} должна быть = {len_u}. {len_u} != {len(val)}')
-        # for i in range(len_u):  # группы
-        #     self._v['input'][i].update(val[i])
 
     def update_z(self, value: ListNumber) -> None:
         self.update_var_value(value, var='add_input')
@@ -520,6 +508,9 @@ class Model:
             else:
                 res[k] = []
         return res
+
+    def get_index_fm(self):
+        return self._index_free_member
 
     @property
     def memory_size(self) -> int:
@@ -559,7 +550,6 @@ class Model:
         if self._v['output']:
             return [list(support.flatten(self.get_var_values(t='output', n=-i)))[0] for i in range(p)]
         else:
-            # print('получение выходов:', self._outputs[-p:])
             return self._outputs[-p:]
 
     @property
@@ -654,11 +644,11 @@ def create_model(expr: str) -> Model:
 
 
 def main():
-    expr = "a0+a1*x(t-1)+a2*x(t-2)+a3*u(t-6)+a4*u(t-7)+a5*z1(t-1)+a6*z2(t-1)"
+    # expr = "a0+a1*x(t-1)+a2*x(t-2)+a3*u(t-6)+a4*u(t-7)+a5*z1(t-1)+a6*z2(t-1)"
+    expr = "a0+a1*x(t-1)+a2*x(t-2)+a3*u(t-6)+a4*u(t-7)"
     m = create_model(expr)
-    a = [[1, 1, 1, 1, 1, 0, 5], [1, 1, 1, 1, 1, 1, 6],
-         [1, 1, 1, 1, 1, 2, 7], [1, 1, 1, 1, 1, 3, 8],
-         [1, 1, 1, 1, 1, 4, 9], [1, 1, 1, 1, 1, 3, 10], [1, 1, 1, 1, 1, 2, 11]]
+    a = [[1, 1, 1, 1, 1], [1, 1, 1, 1, 1],
+         [1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]]
 
     m.initialization(type_memory='max', memory_size=0, a=a)
 
