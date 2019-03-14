@@ -130,7 +130,6 @@ class Adaptive(Algorithm):   # 6.6
             raise AttributeError('Не указан метод идентификации.')
         self._matrix_k = None if 'k0' not in kw else kw['k0']  # на старте k0 далее k
         self._n0 = None if 'init_n' not in kw else kw['init_n']  # начальное кол-во измерений >= кол-ву alpha
-
         self._last_ah = None if 'init_ah' not in kw else kw['init_ah']
 
     def update(self, outputs_val, **kwargs):
@@ -146,7 +145,6 @@ class Adaptive(Algorithm):   # 6.6
                 memory = self._identifier.model.memory_size
                 if memory <= 0:
                     raise ValueError('Величина памяти должна быть > 0')
-                memory = self._identifier.model.memory_size
                 dh = np.array(self._identifier.model.outputs_values(memory))
                 fi = np.zeros((memory, len(last_a)))
                 for i in range(memory):
@@ -176,7 +174,7 @@ class Adaptive(Algorithm):   # 6.6
                         d_grad = grad - grad_p
                         if all(map(lambda y: y <= np.power(10.0, -10), d_grad)):  # np.finfo(float).eps
                             break
-                        delta = outputs_val[0] - m.last_x[0] - d_grad @ new_a  # d_grad[1:] @ new_a[1:]
+                        delta = outputs_val[0] - m.last_x[0] - d_grad @ new_a
                         # delta -= h * np.sign(delta)
                         new_a = Adaptive.simplest(new_a, delta, d_grad, gamma=1, g_type='factor')  # **kw
 
@@ -205,14 +203,8 @@ class Adaptive(Algorithm):   # 6.6
                     # TODO: добавить автоматическое заполнение
                     raise ValueError('Не проведена инициализация начальных значений.')
 
-            # last_a = np.array(last_a)
             if use_increments:
                 is_adaptive_w = False if 'adaptive_weight' not in kw else kw['adaptive_weight']
-                # grad = np.array(m.get_grad_value(output=list(support.flatten(m.get_x_values())),
-                #                                  input=list(support.flatten(m.get_u_values())),
-                #                                  coefficient=last_a,
-                #                                  add_input=[]))
-                # grad = np.array(m.get_grad_value(coefficient=last_a))
                 grad_p = np.array(m.get_grad_value(coefficient=last_a,
                                                    output=flatten(m.get_var_values(t='output', n=-1)),
                                                    input=flatten(m.get_var_values(t='input', n=-1)),
@@ -245,10 +237,10 @@ class Adaptive(Algorithm):   # 6.6
                                                 input=flatten(m.get_var_values(t='input')),
                                                 add_input=flatten(m.get_var_values(t='add_input'))
                                                 ))
-            model_ah = m.func_model(coefficient=self._last_ah,
-                                    output=flatten(m.get_var_values(t='output')),
-                                    input=flatten(m.get_var_values(t='input')),
-                                    add_input=flatten(m.get_var_values(t='add_input'))
+            model_ah = m.func_model(*self._last_ah,
+                                    *flatten(m.get_var_values(t='output')),
+                                    *flatten(m.get_var_values(t='input')),
+                                    *flatten(m.get_var_values(t='add_input'))
                                     )
             n = self._identifier.n
             discrepancy = outputs_val - model_ah
@@ -279,7 +271,7 @@ class Adaptive(Algorithm):   # 6.6
 
     @staticmethod
     def simplest_with_memory(last_a, outputs, grads_matrix):
-        # delta = (outputs - last_a @ grads_matrix.T) @ np.linalg.pinv(grads_matrix.T)
+        # delta = np.linalg.pinv(grads_matrix) @ (outputs - last_a @ grads_matrix.T)
         delta = np.linalg.pinv(grads_matrix.T@grads_matrix)@grads_matrix.T@(outputs - last_a @ grads_matrix.T)
         return last_a + delta
 

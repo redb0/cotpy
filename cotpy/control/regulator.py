@@ -220,13 +220,9 @@ class Regulator:
 
         :return: None
         """
-        # if not self._predicted_u:
-        #     pass
         min_tao: int = min([g.min_tao for g in self._predicted_vars['input']])
-        # print('min_tao =', min_tao)
         step = 0
         while step < min_tao:
-            # e = self._expr
             self.forecast_one_step()
             self.expr_subs()
             if step == 0:

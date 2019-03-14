@@ -81,17 +81,6 @@ def moving_avr(a: Number, last_a: Number, last_k_a: Number, window_size: int, *a
     return last_a + (1 / window_size) * (a - last_k_a)
 
 
-# def avr(avr_type):
-#     if avr_type in ('standard', 'std', 'std_avr'):
-#         return std_avr
-#     elif avr_type in ('efi', 'efi_avr'):
-#         return efi_avr
-#     elif avr_type in ('moving', 'moving_avr'):
-#         return moving_avr
-#     else:
-#         return None
-
-
 _alias_map = {
     'standard': ('std', 'std_avr'),
     'efi': ('efi_avr',),

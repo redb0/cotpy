@@ -22,12 +22,10 @@ class Variable:
     def __init__(self, name: str, idx: int,
                  tao: Optional[int] = None, memory: int = 0, values: ListNumber = None, var_type='') -> None:
         self._name = name  # TODO: храть имя типа a, x, xp отдельно
-
         self._idx = idx
         self._tao = tao
         self._memory = memory
         self._values = values
-
         self._type = var_type
 
     # TODO: возможно сделать через setter
@@ -82,21 +80,8 @@ class Variable:
 
     def update_name_tao(self, tao):  # tao=var.tao - 1
         if tao < 0:
-            # if self.name[:len(variable_names['obj'])] == variable_names['obj']:
-            #     self.name = variable_names['predicted_outputs'] + self.name[len(variable_names['obj']):]
-            # elif self.name[:len(variable_names['control'])] == variable_names['control']:
-            #     self.name = variable_names['predicted_inputs'] + self.name[len(variable_names['control']):]
-            # elif self.name[:len(expr_vars['add_input'])] == expr_vars['add_input']:
-            #     self.name = control_law_vars['predicted_add_input'] + self.name[len(expr_vars['add_input']):]
-
             if self._type in expr_vars.keys():
                 self._name = control_law_vars['predicted_'+self._type]
-            # if self._type == expr_vars['output']:
-            #     self._name = control_law_vars['predicted_output']
-            # elif self._type == expr_vars['input']:
-            #     self._name = control_law_vars['predicted_input']
-            # elif self._type == expr_vars['add_input']:
-            #     self._name = control_law_vars['predicted_add_input']
 
         self.update_tao(tao)
 
@@ -109,9 +94,6 @@ class Variable:
 
     def update_tao(self, new_tao):
         self._tao = new_tao
-        # items = self._name.split('_')
-        # items[-1] = str(self._tao)  # self._tao + 1
-        # self._name = '_'.join(items)
 
     @property
     def name(self) -> str:
