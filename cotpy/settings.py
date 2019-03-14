@@ -54,20 +54,6 @@ parameters = {
     'auto_index': False
 }
 
-
-variable_names: Dict[str, str] = {
-    'obj': 'x',
-    'control': 'u',
-    'coefficient': 'a',
-    'time': 't',
-    'predicted_outputs': 'xp',
-    'predicted_inputs': 'up',
-    'trajectory': 'xt',
-
-    'error': 'e',  # ошибка
-    'unknown_impact': 'h',  # неизвестное воздействие
-}
-
 # в mypy есть TypedDict
 # можно так T = TypedDict('T', {'key1': str, 'key2': int})
 default_params: Dict[str, Union[str, int]] = {

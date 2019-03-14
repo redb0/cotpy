@@ -5,7 +5,7 @@ import operator
 from cotpy import support
 import sympy as sp
 import numpy as np
-from cotpy.settings import variable_names, expr_vars, control_law_vars
+from cotpy.settings import expr_vars, control_law_vars
 from sympy.core.add import Add
 from sympy.utilities.autowrap import ufuncify
 from typing import Union, List, Optional, NoReturn
@@ -62,21 +62,17 @@ class Variable:
     def get_value(self):
         return self._values[-self._tao]
 
-    def get_tex_name(self):
-        if self.name[:len(variable_names['obj'])] == variable_names['obj']:
-            if self.tao == 0:
-                return f'{variable_names["obj"]}_{{{self._idx}}}({variable_names["time"]})'
-            return f'{variable_names["obj"]}_{{{self._idx}}}({variable_names["time"]} - {self.tao})'
-        elif self.name[:len(variable_names['control'])] == variable_names['control']:
-            if self.tao == 0:
-                return f'{variable_names["control"]}_{{{self._idx}}}({variable_names["time"]})'
-            return f'{variable_names["control"]}_{{{self._idx}}}({variable_names["time"]} - {self.tao})'
-        elif self.name[:len(variable_names['predicted_outputs'])] == variable_names['predicted_outputs']:
-            return f'{variable_names["obj"]}_{{{self._idx}}}({variable_names["time"]} + {self.tao})'
-        elif self.name[:len(variable_names['predicted_inputs'])] == variable_names['predicted_inputs']:
-            return f'{variable_names["control"]}_{{{self._idx}}}({variable_names["time"]} + {self.tao})'
-        elif self.name[:len(variable_names['coefficient'])] == variable_names['coefficient']:
-            return f'{variable_names["coefficient"]}_{{{self._idx}}}({variable_names["time"]} + {self.tao})'
+    def get_tex_name(self) -> str:
+        from settings import parameters
+        name = f'{expr_vars[self._type]}_{{{self._idx}}}'
+        if self._tao is not None:
+            if self._tao == 0:
+                name += f'({parameters["time"]})'
+            elif self._tao > 0:
+                name += f'({parameters["time"]}-{self._tao})'
+            else:
+                name += f'({parameters["time"]}+{self._tao})'
+        return name
 
     def update_name_tao(self, tao):  # tao=var.tao - 1
         if tao < 0:
