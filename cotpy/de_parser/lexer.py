@@ -6,17 +6,30 @@ start_state = 1
 
 
 def init_fsm(n: int):  # finite-state machine
+    """
+    Инициализация конечных автоматов. 
+    Начальное состояние каждого автомата задается переменной start_state. 
+    Значение которой по умолчанию равно 1.
+    :param n: количество автоматов.
+    :type n : int
+    :return: список (длиной n) состояний автоматов
+    """
     states = [start_state for _ in range(n)]
     return states
 
 
 def identifier_fsm(c: str, last_state: int) -> int:
-    # last_state, *_ = last_state
+    """
+    Конечный автомат распознования идентификатора.
+    :param c         : текущий символ строки
+    :type c          : str
+    :param last_state: предыдущее состояние автомата
+    :type last_state : int
+    :return: токен идентификатора, в противном случае состояние ошибки (final_error_state)
+    """
     if (last_state == start_state and c.isalpha()) or (last_state == TokenKind.IDENTIFIER and
                                                        (c.isalnum() or c == '_')):
-        return TokenKind.IDENTIFIER  # промежуточное состояние
-    # elif last_state == 2 and not c.isalnum():
-    #     return 3  # успешное завершение
+        return TokenKind.IDENTIFIER
     else:
         return final_error_state  # ошибочное завершение
 
@@ -71,6 +84,17 @@ def numbers_fsm(c: str, last_state: int) -> int:
 
 
 def identify(c: str, states):
+    """
+    Идентификация символа.
+    Распознаются 4 вида лексем: идентификаторы (имена переменных, функций), 
+    знаки основных математических операций, скобки, числа.
+    :param c     : символ, требующий идентификации
+    :type c      : str
+    :param states: список состояний каждого автомата. 
+                   Состояние каждого автомата представлено целым числом.
+    :type states : list
+    :return: обновленный список состояний автоматов
+    """
     states[0] = identifier_fsm(c, states[0])  # идентификаторы
     states[1] = math_sings_fsm(c, states[1])  # матем. знаки
     states[2] = brackets_fsm(c, states[2])  # скобки
@@ -100,21 +124,15 @@ def tokenize(s: str):
     last_final_state = 0
     states = init_fsm(number_fsm)
     i = 0
-    # print(s)
     while i < len(s):
         states = identify(s[i], states)
-        # print(s[i], ': ', states)
         if all_error_state(states):
             if last_final_state == 0:
                 token = Token(last_final_state, s[start_idx:start_idx + 1], start_idx, start_idx)
-                # print('Ошибка: ', s[i])
                 i = start_idx
                 start_idx += 1
             else:
                 token = Token(last_final_state, s[start_idx:i], start_idx, i - 1)
-                # last_idx_final_state = i - 1
-                # states = init_fsm(number_fsm)
-                # print('Распознано: ', token)
                 i = last_idx_final_state
                 start_idx = last_idx_final_state + 1
             states = init_fsm(number_fsm)
@@ -125,7 +143,6 @@ def tokenize(s: str):
         i += 1
     if ((last_final_state != 0) or not all_start_state(states)) and (i >= len(s)):
         token = Token(last_final_state, s[start_idx:i], start_idx, i - 1)
-        # print('Распознано: ', token)
         yield token
 
 

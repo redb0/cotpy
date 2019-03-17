@@ -1,4 +1,5 @@
 class TokenKind:
+    """Виды токенов"""
     IDENTIFIER = 2
     SIGN = 3
     BRACKET = 4
@@ -16,6 +17,17 @@ for k, v in TokenKind.__dict__.items():
 
 class Token:
     def __init__(self, kind: int, s: str, start_idx: int, end_idx: int):
+        """
+        Создание токена.
+        :param kind:      вид токена
+        :type kind:       int
+        :param s:         идентифицированная строка
+        :type s:          str
+        :param start_idx: индекс начала токена в исходной строке
+        :type start_idx:  int
+        :param end_idx:   индекс конца токена в исходной строке
+        :type end_idx:    int
+        """
         self._kind = kind
         self._s = s
         self._start_idx = start_idx
