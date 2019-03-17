@@ -1,16 +1,15 @@
 import copy
 import itertools
 import operator
-
-from cotpy import support
-import sympy as sp
-import numpy as np
-from cotpy.settings import expr_vars, control_law_vars
-from sympy.core.add import Add
-from sympy.utilities.autowrap import ufuncify
 from typing import Union, List, Optional, NoReturn
 
-from cotpy.analyzer.validation import check_brackets
+import sympy as sp
+import numpy as np
+from sympy.core.add import Add
+from sympy.utilities.autowrap import ufuncify
+
+from cotpy import support
+from cotpy.settings import expr_vars, control_law_vars
 
 Number = Union[int, float]
 ListNumber = List[Number]
@@ -607,8 +606,6 @@ class Model:
 
 def create_model(expr: str) -> Model:
     # TODO: документация
-    if not check_brackets(expr, brackets='()'):
-        raise ValueError('Некорректно расставлены скобки')
     from cotpy.de_parser.parser import expr_parse
     model_expr, model_vars = expr_parse(expr)
     model = Model()

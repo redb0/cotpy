@@ -3,9 +3,10 @@ import warnings
 from cotpy.de_parser.tokens import TokenKind
 from cotpy.de_parser.lexer import tokenize
 from cotpy.settings import expr_vars, parameters
+from de_parser.validation import check_brackets
+
 
 # синтаксический анализатор
-
 start_state = 1
 final_error_state = 0
 
@@ -270,11 +271,10 @@ def parse(tokens):
 
 def expr_parse(expr: str):
     expr = expr.replace(' ', '')
+    if not check_brackets(expr, brackets='()'):
+        raise ValueError('Некорректно расставлены скобки')
     tokens = list(tokenize(expr))
-    # print('Токены:', tokens)
     expr, res = parse(tokens)
-    # print('Выражение:', expr)
-    # print('Результат:', res)
     return expr, res
 
 
