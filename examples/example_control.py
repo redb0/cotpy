@@ -23,77 +23,50 @@ params = {'font.family': 'Times New Roman',
 plt.rcParams.update(params)
 
 
-def draw(input_x, output, a, model_v, real_a, setpoint, time):
+def plot_coefficient(axs, t, a, ax, xlabel, ylabel, color):
+    axs.plot(t, a, linestyle='-', color=color)
+    axs.plot(t, [ax for _ in range(len(a))], linestyle='--', color=color)
+    axs.set_xlabel(xlabel)
+    axs.set_ylabel(ylabel, rotation='horizontal', ha='right')
+    axs.grid(True)
+
+
+def draw_object_movement(t, x, xt, u):
     fig, axs = plt.subplots(nrows=2, ncols=1)
-    axs[0].plot(time, output, label='$x(t)$')
-    axs[0].plot(time, setpoint, label='$x^{*}(t)$', linestyle='--')
-    # axs[0].plot(time, model_v, label='Модель')  # Model
+    axs[0].plot(t, x, label='$x(t)$')
+    axs[0].plot(t, xt, label='$x^{*}(t)$', linestyle='--')
     axs[0].set_xlabel('$t$')
     axs[0].set_ylabel('$x(t),x^{*}(t)$', rotation='horizontal', ha='right')
     axs[0].grid(True)
     l = axs[0].legend(labelspacing=0, borderpad=0.1)
-    l.draggable(True)
-
-    axs[1].plot(time, input_x, label='Управление')
+    l.set_draggable(True)
+    axs[1].plot(t, u)
     axs[1].set_xlabel('$t$')
     axs[1].set_ylabel('$u(t)$', rotation='horizontal', ha='right')
     axs[1].grid(True)
     plt.show()
 
-    fig, axs = plt.subplots(nrows=3, ncols=1)
-    prop_cycle = plt.rcParams['axes.prop_cycle']
-    colors = prop_cycle.by_key()['color']
-    # if a is not None:
-    #     for i in range(1, len(a[0])):
-    #         axs[i].plot(time, a[:, i], label=f'a_{i}', linestyle='-', color=colors[i])
-    #         axs[i].plot(time, [real_a[i] for _ in range(len(a))], linestyle='--',
-    #                     color=colors[i])  # label=f'real a_{i}',
-    #         axs[i].set_xlabel('Время')  # Time
-    #         axs[i].grid(True)
-    #         l = axs[i].legend()
-    #         l.draggable(True)
-    #
-    #     axs[1].set_xlabel('Время')  # Time
-    #     axs[1].grid(True)
-    #     l = axs[1].legend()
-    #     l.draggable(True)
 
-    axs[0].plot(time, a[:, 0], linestyle='-', color=colors[0])  # label=f'a{0}'
-    axs[0].plot(time, [real_a[0] for _ in range(len(a))], linestyle='--', color=colors[0])  # label=f'real a_{i}',
-    axs[0].set_xlabel('$t$')
-    axs[0].set_ylabel('$\\alpha_{0}$', rotation='horizontal', ha='right')
-    axs[0].grid(True)
-
-    axs[1].plot(time, a[:, 1], label='$\\alpha_{1}$', linestyle='-', color=colors[1])
-    axs[1].plot(time, [real_a[1] for _ in range(len(a))], linestyle='--', color=colors[1])
-    axs[1].plot(time, a[:, 2], label='$\\alpha_{2}$', linestyle='-', color=colors[2])
-    axs[1].plot(time, [real_a[2] for _ in range(len(a))], linestyle='--', color=colors[2])
-    axs[1].set_xlabel('$t$')
-    axs[1].set_ylabel('$\\alpha_{1},\\alpha_{2}$', rotation='horizontal', ha='right')
-    axs[1].grid(True)
-    l = axs[1].legend(labelspacing=0, borderpad=0.3)
-    l.draggable(True)
-    axs[2].plot(time, a[:, 3], label='$\\alpha_{3}$', linestyle='-', color=colors[3])
-    axs[2].plot(time, [real_a[3] for _ in range(len(a))], linestyle='--', color=colors[3])
-    axs[2].plot(time, a[:, 4], label='$\\alpha_{4}$', linestyle='-', color=colors[4])
-    axs[2].plot(time, [real_a[4] for _ in range(len(a))], linestyle='--', color=colors[4])
-    axs[2].set_xlabel('$t$')
-    axs[2].set_ylabel('$\\alpha_{3},\\alpha_{4}$', rotation='horizontal', ha='right')
-    axs[2].grid(True)
-    l = axs[2].legend(labelspacing=0, borderpad=0.3)
-    l.draggable(True)
-    plt.show()
-
-
-def example_1():
-    """Пример использования библиотеки CotPy 
+def example_1(with_err=False):
+    """
+    Пример использования библиотеки CotPy 
     для синтеза закона адаптивного управления 
     с идентификацией. Используется модель с 
-    чистым запаздыванием в 2 такта."""
+    чистым запаздыванием в 2 такта.
+    :param with_err: если True добавляется аддитивная равномерно распределенная помеха 
+                     амплитудой 0.2 к измерению выхода объекта
+    :return: None
+    """
+
+    a = [-10, 0.3, 3]  # реальные коэффициенты
 
     def obj(x, u):
         """Функция имитации объекта."""
-        return -10 + 0.3 * x + 3 * u + np.random.uniform(-2, 2)
+        val = a[0] + a[1] * x + a[2] * u
+        if with_err:
+            return val + np.random.uniform(-0.1, 0.1)
+        else:
+            return val
 
     def xt(j):
         """Функция генерации уставки."""
@@ -110,20 +83,18 @@ def example_1():
     # создание идентификатора и инициализация начальных значений
     idn = identifier.Identifier(m)
     idn.init_data(x=[[0, -11.33, -9.37]],
-                  a=[[1, 1, 1], [1, 1, 1], [1, 1, 1]],
+                  a=np.ones((3, 3)),
                   u=[[0, 2, 3, 4, 4]])
 
     # определение алгоритма идентификации
-    lsm = alg.Adaptive(idn, m='lsm')
-    # smp = alg.Adaptive(idn, m='smp')
+    smp = alg.Adaptive(idn, m='smp')
 
+    n = 30
     # массивы для сохранения промежуточных значений
-    u_ar = np.zeros((25,))
-    o_ar = np.zeros((25,))
-    m_ar = np.zeros((25,))
-    a_ar = np.zeros((25, 3))
-    xt_ar = np.zeros((25, ))
-    er = np.zeros((25, ))
+    u_ar = np.zeros((n,))
+    o_ar = np.zeros((n,))
+    a_ar = np.zeros((n, len(a)))
+    xt_ar = np.zeros((n, ))
 
     # создание регулятора, установка ограничений на управление и синтез закона управления
     r = Regulator(m)
@@ -131,14 +102,13 @@ def example_1():
     r.synthesis()
 
     # основной цикл
-    for i in range(25):
+    for i in range(n):
         # измерение выхода объекта
-        v = obj(*idn.model.get_var_values(t='x')[0], *idn.model.get_var_values(t='u')[0])
-        obj_val = [v]
+        obj_val = [obj(*idn.model.get_var_values(t='x')[0], *idn.model.get_var_values(t='u')[0])]
 
-        # идентификация коэффициентов модели и обновляем значения коэффициентов
-        new_a = lsm.update(obj_val, w=0.01, init_weight=0.01)
-        # new_a = smp.update(obj_val, gamma=0.01, gt='a', weight=0.9, h=0.1, deep_tuning=True)
+        # Для идентификации используется простейший адаптивный алгоритм
+        # с методом последовательной линеаризации (глубокая подстройка)
+        new_a = smp.update(obj_val, gamma=0.01, gt='a', weight=0.9, h=0.1, deep_tuning=True)
         idn.update_a(new_a)
 
         # расчет управляющего воздействия
@@ -149,34 +119,45 @@ def example_1():
         o_ar[i] = obj_val[0]
         a_ar[i] = new_a
         xt_ar[i] = xt(i)
-        m_ar[i] = idn.model.get_last_model_value()
 
         # обновление состояния модели
         idn.update_x(obj_val)
         idn.update_u(new_u)
-        er[i] = v - xt(i)
 
-    print(m.last_a)
-    print(er)
-    t = np.array([i for i in range(25)])
-    draw(u_ar, o_ar, a_ar, m_ar, [-10, 0.3, 3], xt_ar, t)
-    fig, axs = plt.subplots(nrows=1, ncols=1)
-    axs.plot(t, er, label='Error')
-    axs.set_xlabel('Time')
-    axs.grid(True)
-    axs.legend()
+    t = [i for i in range(n)]
+    draw_object_movement(t, o_ar, xt_ar, u_ar)
+
+    # График процесса идентификации
+    fig, axs = plt.subplots(nrows=3, ncols=1)
+    prop_cycle = plt.rcParams['axes.prop_cycle']
+    colors = prop_cycle.by_key()['color']
+
+    for i in range(len(a)):
+        plot_coefficient(axs[i], t, a_ar[:, i], a[i], '$t$', f'$\\alpha_{{{str(i)}}}$', colors[i])
+
     plt.show()
 
 
-def example_2():
-    """Пример использования библиотеки CotPy для синтеза 
-    закона адаптивного управления. Для идентификации 
-    используется алгоритм метода наименьших квадратов. 
-    Модель простая с небольшой инерцией."""
+def example_2(with_err=False):
+    """
+    Пример использования библиотеки CotPy для синтеза 
+    закона адаптивного управления. 
+    Для идентификации используется стандартный алгоритм метода наименьших квадратов. 
+    Модель простая с небольшой инерцией.
+    :param with_err: если True добавляется аддитивная равномерно распределенная помеха 
+                     амплитудой 0.4 к измерению выхода объекта
+    :return: None
+    """
+
+    a = [-10, 0.3, 0.1, 3]
 
     def obj(x1, x2, u):
         """Функция имитации объекта."""
-        return -10 + 0.3 * x1 + 0.1 * x2 + 3 * u + np.random.uniform(-5, 5)
+        val = a[0] + a[1] * x1 + a[2] * x2 + a[3] * u
+        if with_err:
+            return val + np.random.uniform(-0.2, 0.2)
+        else:
+            return val
 
     def xt(j):
         """Функция генерации уставки."""
@@ -203,13 +184,13 @@ def example_2():
     r.set_limit(0, 255)
     r.synthesis()
 
-    u_ar = np.zeros((30,))
-    o_ar = np.zeros((30,))
-    m_ar = np.zeros((30,))
-    a_ar = np.zeros((30, 4))
-    xt_ar = np.zeros((30,))
+    n = 30
+    u_ar = np.zeros((n,))
+    o_ar = np.zeros((n,))
+    a_ar = np.zeros((n, len(a)))
+    xt_ar = np.zeros((n,))
 
-    for i in range(30):
+    for i in range(n):
         x = [obj(*idn.model.get_var_values(t='x')[0], *idn.model.get_var_values(t='u')[0])]
 
         new_a = lsm.update(x, w=0.01, init_weight=0.01)
@@ -221,15 +202,35 @@ def example_2():
         o_ar[i] = x[0]
         a_ar[i] = new_a
         xt_ar[i] = xt(i)
-        m_ar[i] = idn.model.get_last_model_value()
 
         idn.update_x(x)
         idn.update_u(new_u)
 
     print('Last coefficients:', idn.model.last_a)
 
-    t = np.array([i for i in range(30)])
-    draw(u_ar, o_ar, a_ar, m_ar, [-10, 0.3, 0.1, 3], xt_ar, t)
+    t = np.array([i for i in range(n)])
+
+    draw_object_movement(t, o_ar, xt_ar, u_ar)
+
+    # График процесса идентификации
+    fig, axs = plt.subplots(nrows=3, ncols=1)
+    prop_cycle = plt.rcParams['axes.prop_cycle']
+    colors = prop_cycle.by_key()['color']
+
+    plot_coefficient(axs[0], t, a_ar[:, 0], a[0], '$t$', '$\\alpha_{0}$', colors[0])
+
+    for i in range(1, 3):
+        axs[1].plot(t, a_ar[:, i], label=f'$\\alpha_{{{str(i)}}}$', linestyle='-', color=colors[i])
+        axs[1].plot(t, [a[i] for _ in range(n)], linestyle='--', color=colors[i])
+    axs[1].set_xlabel('$t$')
+    axs[1].set_ylabel('$\\alpha_{1},\\alpha_{2}$', rotation='horizontal', ha='right')
+    axs[1].grid(True)
+    l = axs[1].legend(labelspacing=0, borderpad=0.3)
+    l.set_draggable(True)
+
+    plot_coefficient(axs[2], t, a_ar[:, 3], a[3], '$t$', '$\\alpha_{3}$', colors[1])
+
+    plt.show()
 
 
 def example_3():
@@ -259,12 +260,12 @@ def example_3():
     r.synthesis()
     r.set_limit(-25, 40)
 
-    u_ar = np.zeros((30,))
-    o_ar = np.zeros((30,))
-    xt_ar = np.zeros((30,))
-    m_ar = np.zeros((30,))
+    n = 30
+    u_ar = np.zeros((n,))
+    o_ar = np.zeros((n,))
+    xt_ar = np.zeros((n,))
 
-    for i in range(30):
+    for i in range(n):
         obj_val = [obj(*m.get_var_values(t='x')[0], *m.get_var_values(t='u')[0])]
         new_u = r.update(obj_val, xt(i + 1))
         m.update_x(obj_val)
@@ -272,22 +273,37 @@ def example_3():
         u_ar[i] = new_u[0]
         o_ar[i] = obj_val[0]
         xt_ar[i] = xt(i)
-        m_ar[i] = m.get_last_model_value()
 
-    t = np.array([i for i in range(30)])
-    draw(u_ar, o_ar, None, m_ar, [], xt_ar, t)
+    t = np.array([i for i in range(n)])
+
+    draw_object_movement(t, o_ar, xt_ar, u_ar)
 
 
-def example_4(use_lsm=False):
-    """Пример использование библиотеки CotPy для адаптивного 
+def example_4(use_lsm=False, with_err=False):
+    """
+    Пример использование библиотеки CotPy для адаптивного 
     управления на основе сложной линейной модели с чистым 
     запаздыванием в 5 тактов.
-    Моделируется процесс нагрева и поддержания температуры жидкости."""
+    Моделируется процесс нагрева и поддержания температуры жидкости.
+    :param use_lsm: Использование адаптивного алгоритма МНК. 
+                    Есле use_lsm=False используется простейшый адаптивный алгоритм.
+    :param with_err: Добавление аддитивной равномерно распределенной помехи.
+    :return: None
+    """
+
+    # реальные коэффициенты
+    a = [1.68, 1.235, -0.319, 0.04, 0.027]
 
     def obj(x1, x2, u1, u2):
-        return 1.68 + 1.235 * x1 - 0.319 * x2 + 0.04 * u1 + 0.027 * u2  # + np.random.uniform(-0.1, 0.1)
+        """Имитация объекта"""
+        val = a[0] + a[1] * x1 + a[2] * x2 + a[3] * u1 + a[4] * u2
+        if with_err:
+            return val + np.random.uniform(-0.1, 0.1)
+        else:
+            return val
 
     def xt(j):
+        """Уставка"""
         if j <= 50:
             return 80
         elif 50 < j <= 80:
@@ -305,93 +321,135 @@ def example_4(use_lsm=False):
         else:
             return 65
 
+    # Создание модели и идентификатора
     expr = "a0+a1*x(t-1)+a2*x(t-2)+a3*u(t-6)+a4*u(t-7)"
     m = model.create_model(expr)
     idn = identifier.Identifier(m)
     print('Модель:', m.sp_expr)
     if m.get_index_fm() is not None:
-        print(f'Индекс свободного члена {m.get_index_fm()}')
+        print(f'Индекс свободного члена: {m.get_index_fm()}')
     else:
         print('Нет свободного члена')
 
+    # Инициализация начальных значений
     if use_lsm:
+        # Для адаптивного алгоритма МНК необходимы "исторические" данные работы объекта.
+        # Инициализация управления нулями (при выключенном объекте)
+        # приведет к неработоспособности алгоритма.
         init_x = [[20, 20, 20.4, 20.764, 21.246, 21.528]]
         init_u = [[10., 0., 10., 0., 10., 0., 0., 0., 0., 0., 0.]]
         method = 'lsm'
     else:
+        # Простейший адаптивный алгоритм не чувствителен к начальным данным.
         init_x = np.full((1, 6), 20.)
         init_u = np.zeros((1, 11))
         method = 'smp'
 
-    # TODO: сделать для случая когда память меньше memory_size = 1
     idn.init_data(a=np.ones((5, 5)), x=init_x, u=init_u, type_memory='min', memory_size=5)
     algorithm = alg.Adaptive(idn, m=method)
 
+    # Создание регулятора и синтез закона управления
     r = Regulator(m)
     r.set_limit(0, 100)
     r.synthesis()
     print('Закон управления:', r.expr)
     print('Аргументы:', r.expr_args)
 
-    n = 240
+    n = 240  # количество рабочих тактов
     u_ar = np.zeros((n,))
     o_ar = np.zeros((n,))
-    m_ar = np.zeros((n,))
-    a_ar = np.zeros((n, 5))
+    a_ar = np.zeros((n, len(a)))
     xt_ar = np.zeros((n,))
-
-    a = np.zeros((n, 5))
+    a_er = np.zeros((n, len(a)))  # массив для сохранения ошибки идентификации
 
     for i in range(n):
         x = [obj(*idn.model.get_var_values(t='x')[0], *idn.model.get_var_values(t='u')[0])]
+        # Идентификация коэффициентов
         # Используется глубокая подстройка на основе приращений (deep_tuning=True),
         # а также адаптивный вес при подстройке свободного коэффициента (aw=True)
         if use_lsm:
+            # Использование модели в приращениях uinc=True и
+            # адаптивного веса при подстройке свободного коэффициента adaptive_weight=False
             new_a = algorithm.update(x, w=0.01, init_weight=0.01, uinc=True, adaptive_weight=False)
         else:
-            new_a = algorithm.update(x, gamma=1, gt='a', weight=0.9, h=0.1, deep_tuning=True, aw=True, use_memory=False)
+            # Использование глубокой подстройки (с использованием модели в приращениях) deep_tuning=True,
+            # адаптивного веса aw=True,
+            # использование памяти use_memory=True
+            new_a = algorithm.update(x, gamma=1, gt='a', weight=0.9, h=0.1, deep_tuning=True, aw=True, use_memory=True)
 
         idn.update_a(new_a)
 
+        # Расчет управляющего воздействия ведется с учетом запаздывания в 5 тактов.
         new_u = r.update(x, xt(i + 6))
 
         u_ar[i] = new_u[0]
         o_ar[i] = x[0]
         a_ar[i] = new_a
         xt_ar[i] = xt(i)
-        m_ar[i] = idn.model.get_last_model_value()
+        a_er[i] = np.array(a) - new_a
 
         idn.update_x(x)
         idn.update_u(new_u)
 
-        a[i] = np.array([1.68, 1.235, -0.319, 0.04, 0.027]) - new_a
-
     print('Last coefficients:', idn.model.last_a)
 
     t = np.array([i for i in range(n)])
-    draw(u_ar, o_ar, a_ar, m_ar, [1.68, 1.235, -0.319, 0.04, 0.027], xt_ar, t)
 
-    fig, axs = plt.subplots(nrows=1, ncols=1)
+    # График движенияя объекта
+    draw_object_movement(t, o_ar, xt_ar, u_ar)
+
+    # График процесса идентификации
+    fig, axs = plt.subplots(nrows=3, ncols=1)
     prop_cycle = plt.rcParams['axes.prop_cycle']
     colors = prop_cycle.by_key()['color']
-    if a is not None:
-        for i in range(len(a[0])):
-            axs.plot(t, a[:, i], label=f'$a_{i}$', linestyle='-', color=colors[i])
-        axs.set_xlabel('$t$')  # Time
+
+    plot_coefficient(axs[0], t, a_ar[:, 0], a[0], '$t$', '$\\alpha_{0}$', colors[0])
+
+    n_ax = 1
+    for i in range(1, 5, 2):
+        for k in range(2):
+            axs[n_ax].plot(t, a_ar[:, i+k], label=f'$\\alpha_{{{str(i+k)}}}$', linestyle='-', color=colors[k+1])
+            axs[n_ax].plot(t, [a[i+k] for _ in range(n)], linestyle='--', color=colors[k+1])
+        axs[n_ax].set_xlabel('$t$')
+        axs[n_ax].set_ylabel(f'$\\alpha_{{{str(i)}}},\\alpha_{{{str(i + 1)}}}$', rotation='horizontal', ha='right')
+        axs[n_ax].grid(True)
+        l = axs[n_ax].legend(labelspacing=0, borderpad=0.3)
+        l.set_draggable(True)
+        n_ax += 1
+
+    # График ошибки идентификации
+    fig, axs = plt.subplots(nrows=1, ncols=1)
+    if a_er is not None:
+        for i in range(len(a_er[0])):
+            axs.plot(t, a_er[:, i], label=f'$e_{{\\alpha_{i}}}$', linestyle='-', color=colors[i])
+        axs.set_xlabel('$t$')
         axs.grid(True)
         axs.legend()
 
     plt.show()
 
 
-def example_5():
-    """Пример использование библиотеки CotPy для адаптивного 
+def example_5(with_err=False):
+    """
+    Пример использование библиотеки CotPy для адаптивного 
     управления на основе нелинейной модели с чистым 
-    запаздыванием в 1 такт."""
+    запаздыванием в 1 такт.
+    :param with_err: Добавление аддитивной равномерно 
+                     распределенной помехи амплитудой 0.2 к выходу объекта 
+    :return: None
+    """
+
+    a = [1.3, 0.52]
+
     def obj(x, u):
-        return 1.3 + 0.52 * x * u  # + np.random.uniform(-0.1, 0.1)
+        """Имитация объекта, описываемого нелинейной относительно входов/выходов моделью."""
+        val = a[0] + a[1] * x * u
+        if with_err:
+            return val + np.random.uniform(-0.1, 0.1)
+        return val
 
     def xt(j):
+        """Уставка"""
         if j <= 75:
             return 75
         elif 75 < j <= 100:
@@ -405,9 +463,10 @@ def example_5():
     m = model.create_model(expr)
     idn = identifier.Identifier(m)
 
-    idn.init_data(a=[[1, 1], [1, 1]],
+    idn.init_data(a=np.ones((2, 2)),
                   x=[[1.3, 1.3]],
                   u=[[0, 0, 0]])
+    # В данном случае простейший адаптивный алгоритм отлично справиться
     smp = alg.Adaptive(idn, m='smp')
 
     r = Regulator(m)
@@ -417,14 +476,13 @@ def example_5():
     n = 240
     u_ar = np.zeros((n,))
     o_ar = np.zeros((n,))
-    m_ar = np.zeros((n,))
-    a_ar = np.zeros((n, 2))
+    a_ar = np.zeros((n, len(a)))
     xt_ar = np.zeros((n,))
 
     for i in range(n):
         x_val = [obj(*idn.model.get_var_values(t='x')[0], *idn.model.get_var_values(t='u')[0])]
 
-        new_a = smp.update(x_val, gamma=1, gt='a', weight=0.9, h=0.1, deep_tuning=True, aw=True)
+        new_a = smp.update(x_val, gamma=1, gt='a', weight=0.9, h=0.1, deep_tuning=False, aw=False)
         idn.update_a(new_a)
 
         new_u = r.update(x_val, xt(i + 1))
@@ -433,7 +491,6 @@ def example_5():
         o_ar[i] = x_val[0]
         a_ar[i] = new_a
         xt_ar[i] = xt(i)
-        m_ar[i] = idn.model.get_last_model_value()
 
         idn.update_x(x_val)
         idn.update_u(new_u)
@@ -441,269 +498,44 @@ def example_5():
     print('Last coefficients:', idn.model.last_a)
 
     t = np.array([i for i in range(n)])
-    draw(u_ar, o_ar, a_ar, m_ar, [1.3, 0.52], xt_ar, t)
 
+    # График движенияя объекта
+    draw_object_movement(t, o_ar, xt_ar, u_ar)
 
-def example_6():
-    def obj(x1, x2, u1, u2):
-        return 1.68 + 1.235 * x1 - 0.319 * x2 + 0.04 * u1 + 0.027 * u2
-
-    t = np.array([i for i in range(50)])
-    x = np.zeros((50,))
-    for i in range(50):
-        if i < 2:
-            x[i] = obj(20, 20, 100, 100)
-        else:
-            x[i] = obj(x[i-1], x[i-2], 100, 100)
-
-    fig, axs = plt.subplots(nrows=1, ncols=1)
-    axs.plot(t, x, label='x', linestyle='-', )
-    axs.set_xlabel('Время')  # Time
-    axs.grid(True)
-    axs.legend()
-
-    plt.show()
-
-
-def example_7():
-    def obj(x1, u1):
-        # return 4 + 1.2 * x1 + 0.7 * u1
-        return -4 + 0.8*x1 + 0.5*u1 #+ np.random.uniform(-0.1, 0.1)
-
-    expr = "a0+a1*x(t-1)+a2*u(t-1)"  # "a0+a1*x(t-1)+a2*u(t-1)"
-    m = model.create_model(expr)
-    idn = identifier.Identifier(m)
-
-    # idn.init_data(a=[[1, 1, 1], [1, 1, 1], [1, 1, 1]],
-    #               x=[[0, 4, 9.5, 15.4, 22.83]],
-    #               u=[[0, 1, 0, 0.5, 0]], memory_size=5, type_memory='max')
-    idn.init_data(a=[[1, 1, 1], [1, 1, 1], [1, 1, 1]],
-                  x=[[0, 3.93, 7.55, 10.01, 12.35]],
-                  u=[[0, 1, 0, 0.5, 0]], memory_size=3, type_memory='max')
-    smp = alg.Adaptive(idn, m='smp')
-    lsm = alg.Adaptive(idn, m='lsm')
-
-    r = Regulator(m)
-    r.set_limit(-50, 50)
-    r.synthesis()
-
-    print('() ->', m.get_var_values(t='output'))
-    print('0 ->', m.get_var_values(t='output', n=0))
-    print('-1 ->', m.get_var_values(t='output', n=-1))
-    print('-2 ->', m.get_var_values(t='output', n=-2))
-    # print('-3 ->', m.get_x_values(n=-3))
-    print('--------')
-    print('1 ->', m.get_var_values(t='output', n=1))
-    print('2 ->', m.get_var_values(t='output', n=2))
-    print('3 ->', m.get_var_values(t='output', n=3))
-    # print('4 ->', m.get_x_values(n=4))
-    # print('3 ->', m.get_x_values(n=3))
-
-    n = 100
-    u_ar = np.zeros((n,))
-    o_ar = np.zeros((n,))
-    m_ar = np.zeros((n,))
-    a_ar = np.zeros((n, 3))
-    xt_ar = np.zeros((n,))
-    a = np.zeros((n, 3))
-
-    for i in range(n):
-        print(i)
-        # x = [obj(*idn.model.get_x_values()[0], *idn.model.get_u_values()[0])]
-        x = [obj(*idn.model.get_var_values(t='x')[0], *idn.model.get_var_values(t='u')[0])]
-        # new_a = smp.update(x, gamma=0.9, gt='f', weight=0.9, h=0.1, deep_tuning=True, aw=False, use_memory=False)
-        new_a = lsm.update(x, w=0.01, init_weight=0.01, uinc=True, adaptive_weight=False)
-
-        idn.update_a(new_a)
-        new_u = r.update(x, 100)
-
-        u_ar[i] = new_u[0]
-        o_ar[i] = x[0]
-        a_ar[i] = new_a
-        xt_ar[i] = 100
-        m_ar[i] = idn.model.get_last_model_value()
-
-        idn.update_x(x)
-        idn.update_u(new_u)
-        print('new_a:', new_a)
-        print('----------------------------------------------------------------')
-
-        a[i] = np.array([-4, .8, 0.5]) - new_a
-
-    print('Last coefficients:', idn.model.last_a)
-
-    t = np.array([i for i in range(n)])
-    draw(u_ar, o_ar, a_ar, m_ar, [-4, 0.8, 0.5], xt_ar, t)
-
-    fig, axs = plt.subplots(nrows=1, ncols=1)
+    # График процесса идентификации
+    fig, axs = plt.subplots(nrows=2, ncols=1)
     prop_cycle = plt.rcParams['axes.prop_cycle']
     colors = prop_cycle.by_key()['color']
-    if a is not None:
-        for i in range(len(a[0])):
-            axs.plot(t, a[:, i], label=f'a_{i}', linestyle='-', color=colors[i])
-        axs.set_xlabel('Время')  # Time
-        axs.grid(True)
-        axs.legend()
 
-    plt.show()
+    plot_coefficient(axs[0], t, a_ar[:, 0], a[0], '$t$', '$\\alpha_{0}$', colors[0])
+    plot_coefficient(axs[1], t, a_ar[:, 1], a[1], '$t$', '$\\alpha_{1}$', colors[0])
 
 
-def example_my_data(show_init_data=False):
+def example_6(use_lsm=False, with_err=False):
+    """
+    Пример использования библиотеки CotPy для модели с дополнительными входами.
+    :param use_lsm: Если уставновлен True используется адаптивный МНК, 
+                    иначе простейший адаптивный алгоритм.
+    :param with_err: Добавление аддитивной равномерно 
+                     распределенной помехи амплитудой 0.1 к выходу объекта 
+    :return: None
+    """
 
-    a_slsm = np.array([-0.19973176, 1.748009, -0.74896242, 0.00832433, -0.0038998])  # По статическому методу МНК
-    a_slsm1 = np.array([0.03667119, 1.77382635, -0.77572604, 0.00631385, -0.00400434])  # По статическому методу МНК (с удержанием температуры на 27.4)
-    a1 = np.array([0.0263, 1.748, -0.74896, 0.008324, - 0.0038998])  # Удерживает начальную температуру, больше ошибка приближения
-
-    def obj(x1, x2, u1, u2, a):
-        return a[0] + a[1] * x1 + a[2] * x2 + a[3] * u1 + a[4] * u2
-
-    if show_init_data:
-        p = []
-        t1 = []
-        with open('data1.txt', 'r') as f:
-            _t = 27.4
-            for line in f.readlines():
-                if line[0] == 'P':
-                    _p = int(line.split(' ')[-1])
-                    p.append(_p)
-                    t1.append(_t)
-                    if t1[-1] == -127:
-                        t1[-1] = t1[-2]
-                if line[0] == 'T':
-                    _t = int(line.split(' ')[-2]) / 10.0
-        print(len(p))
-        print(len(t1))
-
-        # -------- График исходных данных, модели и ошибки -----------
-        n = len(t1)
-        t = np.array([i for i in range(n)])
-        x_data = np.zeros((n, 2))
-        e_data = np.zeros((n, 2))
-        for i in range(n):
-            if i <= 1:
-                x_data[i][0] = obj(t1[0], t1[0], 0, 0, a_slsm)
-                x_data[i][1] = obj(t1[0], t1[0], 0, 0, a_slsm1)
-            else:
-                x_data[i][0] = obj(t1[i-1], t1[i - 2], p[i-1], p[i - 2], a_slsm)
-                x_data[i][1] = obj(t1[i-1], t1[i - 2], p[i-1], p[i - 2], a_slsm1)
-            e_data[i][0] = t1[i] - x_data[i][0]
-            e_data[i][1] = t1[i] - x_data[i][1]
-
-        fig, axs = plt.subplots(nrows=4, ncols=1)
-        axs[0].plot(t, x_data[:, 0], label='Модель по стат. МНК')
-        axs[0].plot(t, t1, label='Объект')
-        axs[1].plot(t, e_data[:, 0], label='Ошибка 1')
-        axs[2].plot(t, x_data[:, 1], label='Модель 2')
-        axs[2].plot(t, t1, label='Объект')
-        axs[3].plot(t, e_data[:, 1], label='Ошибка 2')
-
-        for i in range(4):
-            axs[i].set_xlabel('Время')
-            axs[i].grid(True)
-            axs[i].legend()
-        plt.show()
-        # ------------------------------------------------------------
-
-    def get_xt(j, is_imitation=False):
-        if is_imitation:
-            if j <= 100:  # просто имитация
-                return 75
-            elif 100 < j <= 200:
-                return 78.4
-            elif 200 < j <= 300:
-                return 97.7
-            elif 300 < j <= 350:
-                return 60
-            elif 350 < j <= 400:
-                return 70
-            elif 400 < j <= 500:
-                return 40
-            elif 500 < j <= 600:
-                return 90
-            else:
-                return 55
-        else:
-            if j <= 70:  # уставка для рабочего процесса
-                return 81.4
-            else:
-                return 0.084*j+75.52
-
-    expr = "a0+a1*x(t-1)+a2*x(t-2)+a3*u(t-1)+a4*u(t-2)"
-    m = model.create_model(expr)
-    idn = identifier.Identifier(m)
-    print('Модель:', m.sp_expr)
-
-    idn.init_data(a=[[1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1], [1, 1, 1, 1, 1]],
-                  #x=[[27.4, 27.4, 28.1, 30.0, 30.8, 31.1]],
-                  #u=[[0, 100, 100, 100, 100, 100]], type_memory='min', memory_size=5
-                  x=[[27.4, 27.4, 27.4, 27.4, 27.4, 27.4]],
-                  u=[[0, 0, 0, 0, 0, 0]], type_memory='min', memory_size=5
-                  )
-    smp = alg.Adaptive(idn, m='smp')
-    lsm = alg.Adaptive(idn, m='lsm')
-
-    r = Regulator(m)
-    r.set_limit(0, 100)
-    r.synthesis()
-    print('Закон управления:', r.expr)
-    print('Аргументы:', r.expr_args)
-
-    n = 270  # 700
-    u_ar = np.zeros((n,))
-    o_ar = np.zeros((n,))
-    m_ar = np.zeros((n,))
-    a_ar = np.zeros((n, len(a_slsm)))
-    xt_ar = np.zeros((n,))
-
-    a_er = np.zeros((n, len(a_slsm)))
-
-    for i in range(n):
-        x = [obj(*idn.model.get_var_values(t='x')[0], *idn.model.get_var_values(t='u')[0], a_slsm1)]
-
-        new_a = smp.update(x, gamma=0.01, gt='a', weight=0.9, h=0.1, deep_tuning=True, aw=True, use_memory=True)
-        # new_a = lsm.update(x, w=0.01, init_weight=0.01, uinc=True, adaptive_weight=True)  # efi=0.9
-
-        idn.update_a(new_a)
-
-        new_u = r.update(x, get_xt(i + 1, False))
-
-        u_ar[i] = new_u[0]
-        o_ar[i] = x[0]
-        a_ar[i] = new_a
-        xt_ar[i] = get_xt(i, False)
-        m_ar[i] = idn.model.get_last_model_value()
-
-        idn.update_x(x)
-        idn.update_u(new_u)
-
-        a_er[i] = a_slsm1 - new_a
-
-    print('Last coefficients:', idn.model.last_a)
-
-    t = np.array([i for i in range(n)])
-    draw(u_ar, o_ar, a_ar, m_ar, a_slsm1, xt_ar, t)
-
-    fig, axs = plt.subplots(nrows=1, ncols=1)
-    prop_cycle = plt.rcParams['axes.prop_cycle']
-    colors = prop_cycle.by_key()['color']
-    if a_er is not None:
-        for i in range(len(a_er[0])):
-            axs.plot(t, a_er[:, i], label=f'a_{i}', linestyle='-', color=colors[i])
-        axs.set_xlabel('Время')  # Time
-        axs.grid(True)
-        axs.legend()
-
-    plt.show()
-
-
-def example_9(use_lsm=False):
+    a = np.array([1.68, 1.235, -0.319, 0.04, 0.027, 0.1, 0.05])
 
     def obj(x1, x2, u1, u2, z1, z2):
-        return 1.68 + 1.235 * x1 - 0.319 * x2 + 0.04 * u1 + 0.027 * u2 + 0.1*z1+0.05*z2
+        """Имитация объекта"""
+        val = a[0] + a[1] * x1 + a[2] * x2 + a[3] * u1 + a[4] * u2 + a[5] * z1 + a[6] * z2
+        if with_err:
+            return val + np.random.uniform(-0.05, 0.05)
+        else:
+            return val
 
     def xt():
+        """Уставка"""
         return 65
 
+    # создание модели
     expr = "a0+a1*x(t-1)+a2*x(t-2)+a3*u(t-6)+a4*u(t-7)+a5*z1(t-1)+a6*z2(t-1)"
     m = model.create_model(expr)
     idn = identifier.Identifier(m)
@@ -734,23 +566,25 @@ def example_9(use_lsm=False):
     n = 240
     u_ar = np.zeros((n,))
     o_ar = np.zeros((n,))
-    m_ar = np.zeros((n,))
     a_ar = np.zeros((n, 7))
     xt_ar = np.zeros((n,))
 
-    a = np.zeros((n, 7))
+    er = np.zeros((n, 7))
 
     for i in range(n):
         x = [obj(*np.hstack(idn.model.get_var_values(t='x')),
                  *np.hstack(idn.model.get_var_values(t='u')), *np.hstack(idn.model.get_var_values(t='z')))]
-        # Используется глубокая подстройка на основе приращений (deep_tuning=True),
-        # а также адаптивный вес при подстройке свободного коэффициента (aw=True)
         if use_lsm:
+            # В адаптивном МНК применяется метод последовательной линеаризации (МПЛ) и адаптивный вес
             new_a = algorithm.update(x, w=0.01, init_weight=0.01, uinc=True, adaptive_weight=False)
         else:
-            new_a = algorithm.update(x, gamma=1, gt='a', weight=0.9, h=0.1, deep_tuning=True, aw=True, use_memory=True)
+            # Используется простейший адаптивный с памятью
+            new_a = algorithm.update(x, gamma=1, gt='a', weight=0.9, h=0.1, use_memory=True)
 
         idn.update_a(new_a)
+
+        # Дополнительные входы являются случайными возмущениями (которые можно только измерять)
+        # и, например, принимают случайные в определенных интервалах
         z = [np.random.uniform(5, 6), np.random.uniform(2.5, 3)]
         new_u = r.update(x, xt(), ainputs=z)
 
@@ -758,46 +592,50 @@ def example_9(use_lsm=False):
         o_ar[i] = x[0]
         a_ar[i] = new_a
         xt_ar[i] = xt()
-        m_ar[i] = idn.model.get_last_model_value()
 
         idn.update_x(x)
         idn.update_u(new_u)
         idn.update_z(z)
 
-        a[i] = np.array([1.68, 1.235, -0.319, 0.04, 0.027, 0.1, 0.05]) - new_a
+        er[i] = a - new_a
 
     print('Last coefficients:', idn.model.last_a)
 
     t = np.array([i for i in range(n)])
-    draw(u_ar, o_ar, a_ar, m_ar, [1.68, 1.235, -0.319, 0.04, 0.027, 0.1, 0.05], xt_ar, t)
+    # График движенияя объекта
+    draw_object_movement(t, o_ar, xt_ar, u_ar)
 
-    fig, axs = plt.subplots(nrows=1, ncols=1)
+    # График процесса идентификации
+    fig, axs = plt.subplots(nrows=4, ncols=1)
     prop_cycle = plt.rcParams['axes.prop_cycle']
     colors = prop_cycle.by_key()['color']
-    if a is not None:
-        for i in range(len(a[0])):
-            axs.plot(t, a[:, i], label=f'$a_{i}$', linestyle='-', color=colors[i])
-        axs.set_xlabel('$t$')  # Time
-        axs.grid(True)
-        axs.legend()
+
+    plot_coefficient(axs[0], t, a_ar[:, 0], a[0], '$t$', '$\\alpha_{0}$', colors[0])
+
+    n_ax = 1
+    for i in range(1, len(a)-1, 2):
+        for k in range(2):
+            axs[n_ax].plot(t, a_ar[:, i + k], label=f'$\\alpha_{{{str(i+k)}}}$', linestyle='-', color=colors[k + 1])
+            axs[n_ax].plot(t, [a[i + k] for _ in range(n)], linestyle='--', color=colors[k + 1])
+        axs[n_ax].set_xlabel('$t$')
+        axs[n_ax].set_ylabel(f'$\\alpha_{{{str(i)}}},\\alpha_{{{str(i + 1)}}}$', rotation='horizontal', ha='right')
+        axs[n_ax].grid(True)
+        l = axs[n_ax].legend(labelspacing=0, borderpad=0.3)
+        l.set_draggable(True)
+        n_ax += 1
 
     plt.show()
 
 
 def main():
     # Раскомментируйте интересующий пример.
-    # example_1()
-    # example_2()
+    # example_1(with_err=False)
+    # example_2(with_err=False)
     # example_3()
-    example_4(use_lsm=True)
+    example_4(use_lsm=False, with_err=False)
     # example_5()
-    # example_6()
-
     # example_7()
-    # example_8()
-    # lsm()
-    # example_my_data(False)
-    # example_9()
+    # example_6(use_lsm=False, with_err=False)
 
 if __name__ == '__main__':
     main()
