@@ -64,15 +64,15 @@ def get_weighted_fm(fm_val, discrepancy, weight, is_adaptive_w):
 def scalar_product(m1, m2, weight):  # orthogonality_matrix=None
     # 6.3.6, 6.3.8
     n_0 = len(m1)
-    if isinstance(weight, (int, float)):
-        weight = np.array([1 / weight for _ in m1])
+    # if isinstance(weight, (int, float)):
+    #     weight = np.array([1 / weight for _ in m1])
         # k = (1 / weight) * (m1 @ m2)  # ar_grad.T @ ar_grad
-    elif isinstance(weight, (list, np.ndarray)):
+    if isinstance(weight, (list, np.ndarray)):
         if n_0 != len(weight):
             raise ValueError(f'Количество измерений не совпадает: {n_0} != {len(weight)}.')
         # k = (m1 * (1 / weight)) @ m2  # (ar_grad.T * weight) @ ar_grad
-    else:
-        raise TypeError('Неверный тип аргумента weight. необходим int, float, ndarray.')
+    # else:
+    #     raise TypeError('Неверный тип аргумента weight. необходим int, float, ndarray.')
 
     k = (m1 * (1 / weight)) @ m2  # (ar_grad.T * weight) @ ar_grad
 
@@ -90,12 +90,28 @@ class Algorithm:
 
 class LSM(Algorithm):  # п 6.3, 6.4
     """Класс алгоритмов МНК."""
-    def __init__(self):
+    def __init__(self, identifier, **kwargs):
         super().__init__()
+        self._identifier = identifier
+        kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
+        if 'method' in kw:
+            self._method = kw['method']
+        else:
+            raise AttributeError('Не указан метод идентификации.')
 
-    def update(self, *args, **kwargs):
-        # TODO: написать обертку для lsm
-        pass
+    def update(self, inputs, outputs, *args, **kwargs):
+        kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
+        model = self._identifier.model
+        new_a = None
+        if self._method == 'lsm':
+            weight = 0.01 if 'weight' not in kw else kw['weight']
+            ar_grad = np.zeros((len(outputs), len(model.coefficients)))
+            for i in range(len(ar_grad)):
+                ar_grad[i] = model.get_grad_value()  # коэф, выходы, входы
+                model.update_x([outputs[i]])
+                model.update_u([inputs[i]])
+            new_a = LSM.lsm(ar_grad, outputs, weight)
+        return new_a
 
     @staticmethod
     def lsm(ar_grad, ar_outputs_val, weight):
