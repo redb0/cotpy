@@ -101,16 +101,40 @@ class LSM(Algorithm):  # п 6.3, 6.4
 
     def update(self, inputs, outputs, *args, **kwargs):
         kw = support.normalize_kwargs(kwargs, alias_map=_alias_map)
+        weight = 0.01 if 'weight' not in kw else kw['weight']
         model = self._identifier.model
         new_a = None
-        if self._method == 'lsm':
-            weight = 0.01 if 'weight' not in kw else kw['weight']
+        if self._method == 'lsm':  # least square method
             ar_grad = np.zeros((len(outputs), len(model.coefficients)))
             for i in range(len(ar_grad)):
                 ar_grad[i] = model.get_grad_value()  # коэф, выходы, входы
                 model.update_x([outputs[i]])
                 model.update_u([inputs[i]])
             new_a = LSM.lsm(ar_grad, outputs, weight)
+        elif self._method == 'slm':  # sequential linearization method
+            number_iter = 5 if 'numit' not in kw else kw['numit']
+            gamma = 1
+            new_a = np.array(model.last_a)
+            init_data = model.get_all_var_values()
+            deviation = 0
+            for i in range(number_iter):
+                ar_grad = np.zeros((len(outputs), len(model.coefficients)))
+                h = np.zeros((len(outputs)))
+                for j in range(len(ar_grad)):
+                    ar_grad[j] = model.get_grad_value()  # коэф, выходы, входы
+                    h[j] = outputs[j] - model.get_last_model_value()
+                    model.update_x([outputs[j]])
+                    model.update_u([inputs[j]])
+                delta = LSM.lsm(ar_grad, h, weight)
+                new_a = new_a + (gamma / (i + 1)) * delta
+                d = np.sum(np.power(h, 2))  # / weight
+                # print(d)
+                if i != 0 and deviation < d:
+                    new_a = model.last_a
+                    break
+                deviation = d
+                model.update_a(new_a)
+                model.initialization(type_memory='min', memory_size=0, **init_data)
         return new_a
 
     @staticmethod
