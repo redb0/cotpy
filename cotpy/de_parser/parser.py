@@ -3,7 +3,7 @@ import warnings
 from cotpy.de_parser.tokens import TokenKind
 from cotpy.de_parser.lexer import tokenize
 from cotpy.settings import expr_vars, parameters
-from de_parser.validation import check_brackets
+from cotpy.de_parser.validation import check_brackets
 
 
 # синтаксический анализатор
