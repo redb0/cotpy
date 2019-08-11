@@ -4,7 +4,7 @@ import matplotlib.font_manager
 import matplotlib.pyplot as plt
 
 from cotpy import model
-from cotpy.identification import alg
+from cotpy.identification import alg_old
 from cotpy.identification import identifier
 from cotpy.control.regulator import Regulator
 
@@ -87,7 +87,7 @@ def example_1(with_err=False):
                   u=[[0, 2, 3, 4, 4]])
 
     # определение алгоритма идентификации
-    smp = alg.Adaptive(idn, m='smp')
+    smp = alg_old.Adaptive(idn, m='smp')
 
     n = 30
     # массивы для сохранения промежуточных значений
@@ -178,7 +178,7 @@ def example_2(with_err=False):
     # передавать вовсе, тогда по умолчанию инициализируется единицами)
     # либо другими предполагаемыми значениями.
     idn.init_data(x=[[0, 0, -10, -10, -11]], u=[[0, 1, 1, 1]])
-    lsm = alg.Adaptive(idn, m='lsm')
+    lsm = alg_old.Adaptive(idn, m='lsm')
 
     r = Regulator(m)
     r.set_limit(0, 255)
@@ -294,11 +294,22 @@ def example_4(use_lsm=False, with_err=False):
     # реальные коэффициенты
     a = [1.68, 1.235, -0.319, 0.04, 0.027]
 
-    def obj(x1, x2, u1, u2):
+    def obj(x1, x2, u1, u2, j):
         """Имитация объекта"""
         val = a[0] + a[1] * x1 + a[2] * x2 + a[3] * u1 + a[4] * u2
         if with_err:
             return val + np.random.uniform(-0.1, 0.1)
+            # return val + np.random.uniform(-0.15, 0.15)
+            # return val + np.random.uniform(-0.2, 0.2)
+            # return val + np.random.uniform(-1, 1)
+            # return val + np.random.uniform(-1.5, 1.5)
+            # return val + np.random.uniform(-5, 5)
+            # return val + np.random.uniform(-0.5, 0.5)
+            # return val - 0.1
+            # return val - 0.3
+            # return val - 0.5
+            # return val + 5
+            # return val + 0.1*np.sin(2*np.pi*j/240*100)
         else:
             return val
 
@@ -341,12 +352,12 @@ def example_4(use_lsm=False, with_err=False):
         method = 'lsm'
     else:
         # Простейший адаптивный алгоритм не чувствителен к начальным данным.
-        init_x = np.full((1, 6), 20.)
-        init_u = np.zeros((1, 11))
+        init_x = np.full((1, 7), 20.)  # 6
+        init_u = np.zeros((1, 12))  # 11
         method = 'smp'
 
-    idn.init_data(a=np.ones((5, 5)), x=init_x, u=init_u, type_memory='min', memory_size=5)
-    algorithm = alg.Adaptive(idn, m=method)
+    idn.init_data(a=np.ones((5, 5)), x=init_x, u=init_u, type_memory='min', memory_size=6)  # 5  6
+    algorithm = alg_old.Adaptive(idn, m=method)
 
     # Создание регулятора и синтез закона управления
     r = Regulator(m)
@@ -363,7 +374,7 @@ def example_4(use_lsm=False, with_err=False):
     a_er = np.zeros((n, len(a)))  # массив для сохранения ошибки идентификации
 
     for i in range(n):
-        x = [obj(*idn.model.get_var_values(t='x')[0], *idn.model.get_var_values(t='u')[0])]
+        x = [obj(*idn.model.get_var_values(t='x')[0], *idn.model.get_var_values(t='u')[0], i)]
         # Идентификация коэффициентов
         # Используется глубокая подстройка на основе приращений (deep_tuning=True),
         # а также адаптивный вес при подстройке свободного коэффициента (aw=True)
@@ -375,7 +386,9 @@ def example_4(use_lsm=False, with_err=False):
             # Использование глубокой подстройки (с использованием модели в приращениях) deep_tuning=True,
             # адаптивного веса aw=True,
             # использование памяти use_memory=True
-            new_a = algorithm.update(x, gamma=1, gt='a', weight=0.9, h=0.1, deep_tuning=True, aw=True, use_memory=True)
+            new_a = algorithm.update(x, gamma=1, gt='a', weight=0.9, h=0.1, deep_tuning=True, aw=False, use_memory=True)
+            # new_a = idn.avr(new_a, avr_type='efi', l=0.98)
+            # new_a = idn.avr(new_a, avr_type='std')
 
         idn.update_a(new_a)
 
@@ -467,7 +480,7 @@ def example_5(with_err=False):
                   x=[[1.3, 1.3]],
                   u=[[0, 0, 0]])
     # В данном случае простейший адаптивный алгоритм отлично справиться
-    smp = alg.Adaptive(idn, m='smp')
+    smp = alg_old.Adaptive(idn, m='smp')
 
     r = Regulator(m)
     r.set_limit(0, 100)
@@ -555,7 +568,7 @@ def example_6(use_lsm=False, with_err=False):
 
     idn.init_data(a=np.ones((7, 7)), x=init_x, u=init_u, z=init_z,
                   type_memory='min', memory_size=5)
-    algorithm = alg.Adaptive(idn, m=method)
+    algorithm = alg_old.Adaptive(idn, m=method)
 
     r = Regulator(m)
     r.set_limit(0, 100)
@@ -628,6 +641,9 @@ def example_6(use_lsm=False, with_err=False):
 
 
 def example_7():
+    """Пример расчета коэффициентов модели по имеющимся 
+    данным входов и выходов объекта. 
+    Используется стандартный метод наименьших квадратов."""
     # исходные данные входов (u) и выходов (x) объекта
     u = [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
          100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100,
@@ -665,7 +681,7 @@ def example_7():
     idn.init_data(a=np.ones((5, 5)), x=np.full((1, 6), x[0]), u=np.zeros((1, 6)),
                   type_memory='min', memory_size=0)
     # для вычисления коэффициентов используем стандартный МНК
-    algorithm = alg.LSM(idn, m='lsm')
+    algorithm = alg_old.LSM(idn, m='lsm')
 
     print('Количество измерений:', len(u))
     new_a = algorithm.update(u, x)
@@ -677,10 +693,10 @@ def main():
     # example_1(with_err=False)
     # example_2(with_err=False)
     # example_3()
-    # example_4(use_lsm=False, with_err=False)
+    example_4(use_lsm=True, with_err=True)
     # example_5()
     # example_6(use_lsm=False, with_err=False)
-    example_7()
+    # example_7()
 
 if __name__ == '__main__':
     main()

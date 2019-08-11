@@ -242,17 +242,17 @@ class GroupVariable:
     def all_tao_values(self, n: int=0, is_new: bool=True):  # -> ListNumber
         # хранятся в порядке убывания tao, self._memory = mem + tao - 1
         if n <= 0:
-            return [self._values[n - v.tao] for v in self._vars]
+            return np.array([self._values[n - v.tao] for v in self._vars])
         else:
             n -= 1
             if is_new:
                 if n >= self._min_memory - self._max_tao + 1:
                     raise IndexError(f'Индекс за пределами диапозона. n >= {self._min_memory - self._max_tao + 1}')
-                return [self._values[n - self._min_memory + self._max_tao - v.tao] for v in self._vars]
+                return np.array([self._values[n - self._min_memory + self._max_tao - v.tao] for v in self._vars])
             if n > len(self._values) - self._max_tao:
                 raise IndexError(f'Индекс за пределами диапозона. n >= {len(self._values) - self._max_tao}')
             else:
-                return [self._values[n + self._max_tao - v.tao] for v in self._vars]
+                return np.array([self._values[n + self._max_tao - v.tao] for v in self._vars])
 
     @property
     def memory(self) -> int:
@@ -382,14 +382,20 @@ class Model:
                     names += [k.name for k in item]
         self._sp_var = sp.var(names)
 
-    def get_var_values(self, t: str, n: int=0, is_new: bool=True):
+    def get_var_values(self, t: str='', n: int=0, is_new: bool=True):
         tmp_expr_vars = {v: k for k, v in expr_vars.items()}
-        if t in expr_vars.values():
+        keys = (k for k in self._v.keys() if k != "coefficient")
+        if t == '':
+            res = {}
+            for k in keys:
+                res[k] = np.array([g.all_tao_values(n=n, is_new=is_new) for g in self._v[k]]).flatten()
+            return res
+        elif t in expr_vars.values():
             t = tmp_expr_vars[t]
         elif t not in self._v.keys() or t == 'coefficient':
             raise ValueError(f'Аргумент t должен принимать одно из значений: '
                              f'{repr(k) for k in self._v.keys() if k != "coefficient"}')
-        return [g.all_tao_values(n=n, is_new=is_new) for g in self._v[t]]
+        return np.array([g.all_tao_values(n=n, is_new=is_new) for g in self._v[t]])
 
     def get_last_model_value(self) -> Number:  # TODO: Убрать и сделать один метод get_model_value
         return self._func_model(*list(support.flatten(self.get_var_last_value().values())))
@@ -405,18 +411,18 @@ class Model:
     def generate_model_func(self) -> None:
         self._func_model = ufuncify(self._sp_var, self._sp_expr)
 
-    def get_grad_value(self, *args, **kwargs) -> ListNumber:
+    def get_grad_value(self, *args, **kwargs):  #  -> ListNumber
         if args:
-            return [f(*args) for f in self._grad]
+            return np.array([f(*args) for f in self._grad])
         elif kwargs:
             kw = support.normalize_kwargs(kwargs, alias_map=expr_vars)
             val = self.get_var_last_value()
             for k in val.keys():
                 if k in kw:
                     val[k] = kw[k]
-            return [f(*list(support.flatten(val.values()))) for f in self._grad]
+            return np.array([f(*list(support.flatten(val.values()))) for f in self._grad])
         else:
-            return [f(*list(support.flatten(self.get_var_last_value().values()))) for f in self._grad]
+            return np.array([f(*list(support.flatten(self.get_var_last_value().values()))) for f in self._grad])
 
     def update_data(self, **kwargs) -> Optional[NoReturn]:
         if not kwargs:
@@ -575,9 +581,9 @@ class Model:
 
     def get_coefficients_value(self, i: int):
         if not self._v['coefficient']:
-            return []
+            return np.array([])
         if i < len(self._v['coefficient']):
-            return [c.values[i] for c in self._v['coefficient']]
+            return np.array([c.values[i] for c in self._v['coefficient']])
         else:
             pass
 

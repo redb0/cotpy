@@ -67,6 +67,15 @@ def piecewise_core(p, m, is_diff=False):
     return f
 
 
+def power_core(p, s, e_max=1, w_min=0):  # x
+    def f(x):
+        if abs(x) <= e_max:
+            return ((1 - (abs(x) / e_max) ** p) ** s) * (1-w_min) + w_min
+        else:
+            return w_min
+    return f
+
+
 cores_dict = {  # 6.7.2 (функция, производная)
     'abs': abs_core,
     'abs_pow': abs_pow_core,

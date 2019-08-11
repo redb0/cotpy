@@ -2,7 +2,7 @@ import numpy as np
 
 import matplotlib.pyplot as plt
 
-from cotpy.identification import alg
+from cotpy.identification import alg_old
 from cotpy.model import create_model
 from cotpy.identification import identifier
 
@@ -48,7 +48,7 @@ def smp_linear_model(plotting=False):
     # idn.init_data(x=[[0, 5]], a=[[1, 1], [1, 1]])
 
     # выбор простейшего адаптивного алгоритма
-    smp = alg.Adaptive(idn, method='smp')
+    smp = alg_old.Adaptive(idn, method='smp')
 
     n = 20  # количество тактов
     a = np.zeros((n, 2))
@@ -89,7 +89,7 @@ def smp_nonlinear_model(plotting=False):
     idn.init_data(x=[[0, 9.94, 13.41, 15.44]],
                   a=[[1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1], [1, 1, 1, 1]],
                   u=[[0, 1, 1, 1]])
-    smp = alg.Adaptive(idn, method='smp')
+    smp = alg_old.Adaptive(idn, method='smp')
     n = 20  # количество тактов
     a = np.zeros((n, 4))
     o_ar = np.zeros((n,))
@@ -122,7 +122,7 @@ def lsm_linear_model(plotting=False):
     m = create_model('a_0+a1*x1(t-1)+a_2*u1(t-3)')
     idn = identifier.Identifier(m)
     idn.init_data(x=[[10, 12, 11.2]], a=[[1, 1, 1], [1, 1, 1], [1, 1, 1]], u=[[0, 0, 1, 0, 0]])
-    lsm = alg.Adaptive(idn, m='lsm')
+    lsm = alg_old.Adaptive(idn, m='lsm')
     n = 20
     a = np.zeros((n, 3))
     o_ar = np.zeros((n,))
@@ -160,7 +160,7 @@ def lsm_nonlinear_model(plotting=False):
     idn.init_data(x=[[2.82, 3.43, 3.617]],
                   a=[[1, 1, 1], [1, 1, 1], [1, 1, 1]],
                   u=[])
-    lsm = alg.Adaptive(idn, m='lsm')
+    lsm = alg_old.Adaptive(idn, m='lsm')
     n = 20
     a = np.zeros((n, 3))
     o_ar = np.zeros((n,))
@@ -195,7 +195,7 @@ def robust_lsm_linear_model(plotting=False):  # FIXME: проверить.
     idn.init_data(x=[[0, 4.85, 9.26]],
                   a=[[1, 1, 1], [1, 1, 1], [1, 1, 1]],
                   u=[[0, 1, 1]])
-    lsm = alg.AdaptiveRobust(idn, m='lsm')
+    lsm = alg_old.AdaptiveRobust(idn, m='lsm')
 
     n = 30
     a = np.zeros((n, 3))

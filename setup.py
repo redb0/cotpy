@@ -13,8 +13,8 @@ DOCLINES = (__doc__ or '').split("\n")
 
 setup(
     name='cotpy',
-    version='0.6.0',
-    packages=['cotpy', 'cotpy.tests', 'cotpy.control', 'cotpy.analyzer', 'cotpy.identification'],
+    version='0.8.0',
+    packages=['cotpy', 'cotpy.tests', 'cotpy.control', 'cotpy.de_parser', 'cotpy.identification'],
     install_requires=['numpy', 'sympy'],  # matplotlib, external packages as dependencies
     url='https://github.com/redb0/cotpy',
     license='BSD 3-Clause',

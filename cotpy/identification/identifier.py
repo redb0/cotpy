@@ -24,9 +24,10 @@ class Identifier:
         self._last_ap = None
         self._smoothing = None
 
-    def avr(self, a, last_a, avr_type='std', l=0.9, window_size=1, last_k_a=0):
+    def avr(self, a, avr_type='std', l=0.9, window_size=1, last_k_a=0):
         if self._smoothing is None:
             self._smoothing = smoothing.Smoothing()
+        last_a = self._model.last_a
         return self._smoothing.avr(avr_type=avr_type,
                                    a=a, last_a=last_a, n=self._n, l=l, last_k_a=last_k_a, window_size=window_size)
 
